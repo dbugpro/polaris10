@@ -7,10 +7,10 @@ interface OrbProps {
 
 export const Orb: React.FC<OrbProps> = ({ state, size = 'large' }) => {
   // Determine container classes based on size
-  // Adjusted sizes to ensure it fits better on mobile screens (w-48 for smallest, then up)
+  // Adjusted sizes to ensure it fits better on mobile screens (w-40 for smallest)
   const containerClasses = size === 'large' 
-    ? "w-48 h-48 sm:w-64 sm:h-64 md:w-96 md:h-96" 
-    : "w-12 h-12";
+    ? "w-40 h-40 sm:w-64 sm:h-64 md:w-80 md:h-80" 
+    : "w-10 h-10 md:w-12 md:h-12";
 
   // Determine inner orb animation based on state
   const pulseClass = state === 'thinking' 

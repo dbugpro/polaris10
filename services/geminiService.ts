@@ -1,10 +1,6 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { GroundingSource } from "../types";
 
-// Initialize the client
-// Note: API_KEY is expected to be in process.env.API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 const MODEL_NAME = 'gemini-2.5-flash';
 
 export const generateResponse = async (
@@ -12,6 +8,17 @@ export const generateResponse = async (
   imageBase64?: string
 ): Promise<{ text: string; groundingSources: GroundingSource[] }> => {
   try {
+    // Ensure we are accessing the environment variable at runtime
+    const apiKey = process.env.API_KEY;
+    
+    // Robust check for API Key presence before initializing the SDK
+    if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
+      throw new Error("API Key is not configured. Please check your environment settings to ensure 'API_KEY' is set.");
+    }
+    
+    // Initialize the client per request to ensure we use the current environment variable
+    const ai = new GoogleGenAI({ apiKey });
+
     const parts: any[] = [];
 
     if (imageBase64) {
@@ -36,7 +43,7 @@ export const generateResponse = async (
       config: {
         // Enable Google Search Grounding
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are Polaris, an advanced AI navigator. Your interface is a deep blue orb. You are helpful, precise, and knowledgeable about the world. When using search tools, summarize the information clearly.",
+        systemInstruction: "You are Polaris, an advanced AI navigator. Your interface is a deep blue orb. You are helpful, precise, and knowledgeable about the world. When using search tools, provide clear summaries.",
       },
     });
 
@@ -66,6 +73,7 @@ export const generateResponse = async (
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
+    // Return a user-friendly error message
     throw new Error(error.message || "An unexpected error occurred.");
   }
 };
