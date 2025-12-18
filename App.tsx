@@ -138,7 +138,7 @@ export default function App() {
           <div className={`p-1.5 rounded-lg ${bgColors[mode]} transition-colors duration-500 shadow-lg shadow-black/40`}>
              <Compass className="text-white" size={20} />
           </div>
-          <h1 className="text-lg font-bold tracking-tighter text-white">POLARIS</h1>
+          <h1 className="text-lg font-bold tracking-tighter text-white">POLARIS 1.0</h1>
         </div>
 
         <div className="flex items-center gap-3">
