@@ -6,10 +6,16 @@ import { generateResponse } from './services/geminiService';
 import { MessageItem } from './components/MessageItem';
 import { Orb } from './components/Orb';
 
-// Extend window type for AI Studio bridge using the existing AIStudio type
+// Define the AIStudio interface to match the environment's bridge
+interface AIStudio {
+  hasSelectedApiKey: () => Promise<boolean>;
+  openSelectKey: () => Promise<void>;
+}
+
 declare global {
   interface Window {
-    aistudio: AIStudio;
+    // Making this optional to match the environment's declaration and avoid "identical modifiers" error
+    aistudio?: AIStudio;
   }
 }
 
@@ -147,7 +153,7 @@ export default function App() {
                 <Compass className="relative text-white -rotate-45" size={24} />
             </div>
           <h1 className="text-lg md:text-2xl font-bold tracking-tight text-white">
-            Polaris <span className="text-cyan-500 text-sm md:text-base align-top ml-1">3.0</span>
+            Polaris <span className="text-cyan-500 text-sm md:text-base align-top ml-1">1.0</span>
           </h1>
         </div>
         
