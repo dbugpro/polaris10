@@ -1,29 +1,25 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { GroundingSource } from "../types";
 
-const MODEL_NAME = 'gemini-2.5-flash';
-
 export const generateResponse = async (
   prompt: string,
-  imageBase64?: string
+  imageBase64?: string,
+  useThinking: boolean = false
 ): Promise<{ text: string; groundingSources: GroundingSource[] }> => {
   try {
-    // Ensure we are accessing the environment variable at runtime
+    // Re-pick key from process.env on every call to support dynamic injection from openSelectKey()
     const apiKey = process.env.API_KEY;
     
-    // Robust check for API Key presence before initializing the SDK
     if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
-      throw new Error("API Key is not configured. Please check your environment settings to ensure 'API_KEY' is set.");
+      throw new Error("API Key is not configured. Please click 'Connect API' in the header to select your AI Studio key.");
     }
     
-    // Initialize the client per request to ensure we use the current environment variable
+    // Create new instance right before the call
     const ai = new GoogleGenAI({ apiKey });
 
     const parts: any[] = [];
 
     if (imageBase64) {
-      // If we have an image, we extract the base64 data. 
-      // Usually imageBase64 comes as "data:image/png;base64,..."
       const base64Data = imageBase64.split(',')[1];
       const mimeType = imageBase64.split(';')[0].split(':')[1];
       
@@ -37,19 +33,23 @@ export const generateResponse = async (
 
     parts.push({ text: prompt });
 
+    const modelToUse = useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+    
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: MODEL_NAME,
+      model: modelToUse,
       contents: { parts },
       config: {
-        // Enable Google Search Grounding
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are Polaris, an advanced AI navigator. Your interface is a deep blue orb. You are helpful, precise, and knowledgeable about the world. When using search tools, provide clear summaries.",
+        systemInstruction: "You are Polaris, an advanced AI navigator. Your interface is a deep blue orb. You are helpful, precise, and knowledgeable. " + (useThinking ? "You are currently in Deep Thinking mode, focusing on complex reasoning and thorough analysis." : ""),
+        ...(useThinking ? {
+          thinkingConfig: {
+            thinkingBudget: 32768
+          }
+        } : {})
       },
     });
 
     const text = response.text || "I couldn't generate a response.";
-    
-    // Extract grounding metadata if available
     const groundingSources: GroundingSource[] = [];
     
     const candidates = response.candidates;
@@ -73,7 +73,12 @@ export const generateResponse = async (
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    // Return a user-friendly error message
+    
+    // Check for specific permission/auth errors
+    if (error.message?.includes("API key not valid") || error.message?.includes("Requested entity was not found")) {
+      throw new Error("API Key validation failed. Please ensure you have selected a paid project for the Pro model.");
+    }
+    
     throw new Error(error.message || "An unexpected error occurred.");
   }
 };

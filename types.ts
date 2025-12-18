@@ -9,6 +9,7 @@ export interface Message {
   text: string;
   image?: string; // Base64 string for user uploaded images
   isError?: boolean;
+  isDeepThink?: boolean;
   groundingSources?: GroundingSource[];
   timestamp: number;
 }
