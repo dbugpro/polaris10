@@ -168,7 +168,7 @@ export default function App() {
             <div className="text-center space-y-2">
                <h2 className="text-xl md:text-2xl font-light tracking-[0.2em] text-slate-300 uppercase">System Active</h2>
                <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold flex items-center justify-center gap-2">
-                 Free Tier <span className="w-1 h-1 rounded-full bg-slate-700"></span> Multimodal Navigation
+                 Multimodal Navigation
                </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
@@ -267,7 +267,7 @@ export default function App() {
             </button>
           </form>
           <div className="mt-3 text-center">
-             <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.3em]">Precision AI · Powered by Gemini Flash</p>
+             <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.3em]">Powered by Gemini Flash</p>
           </div>
         </div>
       </footer>
