@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, X, Compass, Brain, Zap, Bolt, Activity, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Send, Image as ImageIcon, X, Compass, Brain, Zap, Bolt, Activity, Key, CheckCircle2 } from 'lucide-react';
 import { Message, LoadingState } from './types';
 import { generateResponse, PolarisMode } from './services/geminiService';
 import { MessageItem } from './components/MessageItem';
@@ -47,6 +47,7 @@ export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [mode, setMode] = useState<PolarisMode>('standard');
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+  const [isAiStudioEnv, setIsAiStudioEnv] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +55,7 @@ export default function App() {
   useEffect(() => {
     const checkKey = async () => {
       if (window.aistudio) {
+        setIsAiStudioEnv(true);
         const hasKey = await window.aistudio.hasSelectedApiKey();
         setHasApiKey(hasKey);
       } else {
@@ -127,17 +129,32 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-white overflow-hidden">
-      <header className="flex items-center justify-between px-6 py-4 glass-panel border-b border-white/5 z-20">
+    <div className="flex flex-col h-screen bg-slate-950 text-white overflow-hidden selection:bg-cyan-500/30">
+      <header className="flex items-center justify-between px-6 py-3 glass-panel border-b border-white/5 z-20">
         <div className="flex items-center gap-3">
-          <Compass className={textColors[mode]} size={28} />
-          <h1 className="text-xl font-bold tracking-tight">POLARIS</h1>
+          <div className={`p-1.5 rounded-lg ${bgColors[mode]} transition-colors duration-500`}>
+             <Compass className="text-white" size={20} />
+          </div>
+          <h1 className="text-lg font-bold tracking-tighter text-white">POLARIS</h1>
         </div>
-        <div className="flex items-center gap-2 bg-black/40 p-1 rounded-full border border-white/10">
-          <button onClick={() => setMode('fast')} className={`p-2 rounded-full transition-all ${mode === 'fast' ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}><Bolt size={18} /></button>
-          <button onClick={() => setMode('standard')} className={`p-2 rounded-full transition-all ${mode === 'standard' ? 'bg-cyan-500 text-black' : 'text-slate-400 hover:text-white'}`}><Zap size={18} /></button>
-          <button onClick={() => setMode('turbo')} className={`p-2 rounded-full transition-all ${mode === 'turbo' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'}`}><Activity size={18} /></button>
-          <button onClick={() => setMode('deep')} className={`p-2 rounded-full transition-all ${mode === 'deep' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'}`}><Brain size={18} /></button>
+
+        <div className="flex items-center gap-3">
+           <div className="hidden sm:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
+            <button onClick={() => setMode('fast')} title="Fast Mode" className={`p-1.5 rounded-full transition-all ${mode === 'fast' ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}><Bolt size={16} /></button>
+            <button onClick={() => setMode('standard')} title="Standard Mode" className={`p-1.5 rounded-full transition-all ${mode === 'standard' ? 'bg-cyan-500 text-black' : 'text-slate-400 hover:text-white'}`}><Zap size={16} /></button>
+            <button onClick={() => setMode('turbo')} title="Turbo Mode" className={`p-1.5 rounded-full transition-all ${mode === 'turbo' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'}`}><Activity size={16} /></button>
+            <button onClick={() => setMode('deep')} title="Deep Mode" className={`p-1.5 rounded-full transition-all ${mode === 'deep' ? 'bg-purple-500 text-white' : 'text-slate-400 hover:text-white'}`}><Brain size={16} /></button>
+          </div>
+
+          {isAiStudioEnv && (
+            <button 
+              onClick={handleConnectKey} 
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${hasApiKey ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/5 text-white/50 border border-white/10 hover:bg-white/10'}`}
+            >
+              {hasApiKey ? <CheckCircle2 size={12} /> : <Key size={12} />}
+              <span>{hasApiKey ? 'Ready' : 'API Key'}</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -145,41 +162,98 @@ export default function App() {
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center space-y-8 opacity-0 animate-in fade-in duration-1000 fill-mode-forwards">
             <Orb state="idle" isDeepThink={mode === 'deep'} isFast={mode === 'fast'} isTurbo={mode === 'turbo'} />
-            <h2 className="text-2xl font-light tracking-widest text-slate-400">WAITING FOR DIRECTION</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
+            <div className="text-center space-y-2">
+               <h2 className="text-xl md:text-2xl font-light tracking-[0.2em] text-slate-300 uppercase">System Active</h2>
+               <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Free Tier · Deep Thinking Enabled</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
               {INITIAL_SUGGESTIONS.map(s => (
-                <button key={s} onClick={() => setInput(s)} className="p-4 text-left glass-panel rounded-xl hover:border-white/20 transition-all text-sm text-slate-400 hover:text-white">{s}</button>
+                <button 
+                  key={s} 
+                  onClick={() => setInput(s)} 
+                  className="p-4 text-left glass-panel rounded-xl hover:bg-white/5 hover:border-white/20 transition-all text-xs md:text-sm text-slate-400 hover:text-white group"
+                >
+                  <span className="group-hover:translate-x-1 transition-transform inline-block">{s}</span>
+                </button>
               ))}
             </div>
           </div>
         ) : (
           <div className="max-w-4xl mx-auto space-y-6">
             {messages.map(m => <MessageItem key={m.id} message={m} />)}
-            {loadingState === LoadingState.THINKING && <div className={`flex items-center gap-3 animate-pulse ${textColors[mode]}`}><Activity className="animate-spin" /> <span>Polaris is navigating...</span></div>}
+            {loadingState === LoadingState.THINKING && (
+              <div className={`flex items-center gap-3 animate-pulse px-4 ${textColors[mode]}`}>
+                <div className="relative">
+                   <Activity className="animate-spin" size={18} />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-[0.2em]">Navigating Knowledge...</span>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
         )}
       </main>
 
-      <footer className="p-4 md:p-8">
+      <footer className="p-4 md:p-6 bg-gradient-to-t from-slate-950 to-transparent">
         <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className={`relative flex items-center glass-panel rounded-2xl border ${borderColors[mode]} transition-colors duration-500`}>
+          {/* Mobile Mode Switcher (Visible only on small screens) */}
+          <div className="flex sm:hidden justify-center gap-4 mb-4">
+             <button onClick={() => setMode('fast')} className={`p-2 rounded-lg ${mode === 'fast' ? 'bg-amber-500' : 'bg-white/5'}`}><Bolt size={18} /></button>
+             <button onClick={() => setMode('standard')} className={`p-2 rounded-lg ${mode === 'standard' ? 'bg-cyan-500' : 'bg-white/5'}`}><Zap size={18} /></button>
+             <button onClick={() => setMode('turbo')} className={`p-2 rounded-lg ${mode === 'turbo' ? 'bg-rose-500' : 'bg-white/5'}`}><Activity size={18} /></button>
+             <button onClick={() => setMode('deep')} className={`p-2 rounded-lg ${mode === 'deep' ? 'bg-purple-500' : 'bg-white/5'}`}><Brain size={18} /></button>
+          </div>
+
+          <form 
+            onSubmit={handleSubmit} 
+            className={`
+              relative flex items-center glass-panel rounded-2xl border ${borderColors[mode]} 
+              transition-all duration-500 shadow-2xl focus-within:ring-2 focus-within:ring-white/10
+            `}
+          >
             {selectedImage && (
-              <div className="absolute bottom-full left-0 mb-4 p-2 glass-panel rounded-lg">
-                <img src={selectedImage} className="h-20 w-auto rounded" />
-                <button onClick={() => setSelectedImage(null)} className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1"><X size={12} /></button>
+              <div className="absolute bottom-full left-0 mb-4 p-2 glass-panel rounded-xl animate-in slide-in-from-bottom-2">
+                <div className="relative">
+                  <img src={selectedImage} className="h-24 w-auto rounded-lg shadow-lg border border-white/10" />
+                  <button 
+                    onClick={() => setSelectedImage(null)} 
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-lg"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
             )}
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="ml-4 text-slate-400 hover:text-white"><ImageIcon size={22} /></button>
-            <input type="file" ref={fileInputRef} hidden onChange={handleImageUpload} />
+            
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current?.click()} 
+              className="ml-4 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+              title="Add Image"
+            >
+              <ImageIcon size={20} />
+            </button>
+            
+            <input type="file" ref={fileInputRef} hidden onChange={handleImageUpload} accept="image/*" />
+            
             <input 
-              className="flex-1 bg-transparent border-none focus:ring-0 p-4 text-white" 
-              placeholder="Enter coordinates..."
+              className="flex-1 bg-transparent border-none focus:ring-0 px-4 py-4 text-sm md:text-base text-white placeholder:text-slate-600" 
+              placeholder={`Communicate with Polaris (${mode})...`}
               value={input}
               onChange={e => setInput(e.target.value)}
             />
-            <button className={`mr-4 p-2 rounded-lg ${bgColors[mode]} text-white`} type="submit"><Send size={20} /></button>
+            
+            <button 
+              className={`mr-3 p-2 rounded-xl ${bgColors[mode]} text-white shadow-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale`} 
+              type="submit"
+              disabled={(!input.trim() && !selectedImage) || loadingState !== LoadingState.IDLE}
+            >
+              <Send size={18} />
+            </button>
           </form>
+          <div className="mt-3 text-center">
+             <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.3em]">Precision Engineering · Zero Subscription Cost</p>
+          </div>
         </div>
       </footer>
     </div>
