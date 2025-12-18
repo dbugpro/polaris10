@@ -26,7 +26,7 @@ export const Orb: React.FC<OrbProps> = ({ state, size = 'large', isDeepThink = f
   const gradientClass = isDeepThink
     ? 'from-purple-600 via-indigo-700 to-blue-500'
     : isTurbo
-    ? 'from-rose-500 via-magenta-600 to-indigo-500'
+    ? 'from-rose-500 via-fuchsia-600 to-indigo-500'
     : isFast
     ? 'from-amber-400 via-orange-500 to-red-500'
     : state === 'thinking'

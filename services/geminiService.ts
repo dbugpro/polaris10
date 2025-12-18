@@ -12,7 +12,7 @@ export const generateResponse = async (
     const apiKey = process.env.API_KEY;
     
     if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
-      throw new Error("API Key is not configured. Please click 'Connect API' in the header to select your AI Studio key.");
+      throw new Error("API Key is not configured. Please use a valid environment key.");
     }
     
     const ai = new GoogleGenAI({ apiKey });
@@ -44,7 +44,7 @@ export const generateResponse = async (
       config: {
         // Search is not available for all models/configs, using it where appropriate
         ...(mode !== 'fast' && mode !== 'turbo' ? { tools: [{ googleSearch: {} }] } : {}),
-        systemInstruction: `You are Polaris, an advanced AI navigator. Your interface is a deep blue orb. You are helpful, precise, and knowledgeable. Mode: ${mode}.`,
+        systemInstruction: `You are Polaris, an advanced AI navigator. Your interface is a glowing orb. You are helpful, precise, and knowledgeable. Mode: ${mode}.`,
         ...(mode === 'deep' ? {
           thinkingConfig: {
             thinkingBudget: 32768
@@ -82,9 +82,6 @@ export const generateResponse = async (
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    if (error.message?.includes("API key not valid") || error.message?.includes("Requested entity was not found")) {
-      throw new Error("API Key validation failed. Please ensure you have selected a valid project.");
-    }
     throw new Error(error.message || "An unexpected error occurred.");
   }
 };
