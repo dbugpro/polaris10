@@ -1,20 +1,20 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { GroundingSource } from "../types";
 
+export type PolarisMode = 'standard' | 'fast' | 'deep' | 'turbo';
+
 export const generateResponse = async (
   prompt: string,
   imageBase64?: string,
-  useThinking: boolean = false
+  mode: PolarisMode = 'standard'
 ): Promise<{ text: string; groundingSources: GroundingSource[] }> => {
   try {
-    // Re-pick key from process.env on every call to support dynamic injection from openSelectKey()
     const apiKey = process.env.API_KEY;
     
     if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
       throw new Error("API Key is not configured. Please click 'Connect API' in the header to select your AI Studio key.");
     }
     
-    // Create new instance right before the call
     const ai = new GoogleGenAI({ apiKey });
 
     const parts: any[] = [];
@@ -33,17 +33,26 @@ export const generateResponse = async (
 
     parts.push({ text: prompt });
 
-    const modelToUse = useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+    let modelToUse = 'gemini-3-flash-preview';
+    if (mode === 'deep') modelToUse = 'gemini-3-pro-preview';
+    if (mode === 'fast') modelToUse = 'gemini-flash-lite-latest';
+    if (mode === 'turbo') modelToUse = 'gemini-3-flash-preview';
     
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: modelToUse,
       contents: { parts },
       config: {
-        tools: [{ googleSearch: {} }],
-        systemInstruction: "You are Polaris, an advanced AI navigator. Your interface is a deep blue orb. You are helpful, precise, and knowledgeable. " + (useThinking ? "You are currently in Deep Thinking mode, focusing on complex reasoning and thorough analysis." : ""),
-        ...(useThinking ? {
+        // Search is not available for all models/configs, using it where appropriate
+        ...(mode !== 'fast' && mode !== 'turbo' ? { tools: [{ googleSearch: {} }] } : {}),
+        systemInstruction: `You are Polaris, an advanced AI navigator. Your interface is a deep blue orb. You are helpful, precise, and knowledgeable. Mode: ${mode}.`,
+        ...(mode === 'deep' ? {
           thinkingConfig: {
             thinkingBudget: 32768
+          }
+        } : {}),
+        ...(mode === 'turbo' ? {
+          thinkingConfig: {
+            thinkingBudget: 16384
           }
         } : {})
       },
@@ -73,12 +82,9 @@ export const generateResponse = async (
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    
-    // Check for specific permission/auth errors
     if (error.message?.includes("API key not valid") || error.message?.includes("Requested entity was not found")) {
-      throw new Error("API Key validation failed. Please ensure you have selected a paid project for the Pro model.");
+      throw new Error("API Key validation failed. Please ensure you have selected a valid project.");
     }
-    
     throw new Error(error.message || "An unexpected error occurred.");
   }
 };

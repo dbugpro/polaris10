@@ -1,37 +1,81 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, X, Compass, Brain, Zap, Link as LinkIcon, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Send, Image as ImageIcon, X, Compass, Brain, Zap, Bolt, Activity, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { Message, LoadingState } from './types';
-import { generateResponse } from './services/geminiService';
+import { generateResponse, PolarisMode } from './services/geminiService';
 import { MessageItem } from './components/MessageItem';
 import { Orb } from './components/Orb';
-
-// Define the AIStudio interface to match the environment's bridge
-interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    // Making this optional to match the environment's declaration and avoid "identical modifiers" error
-    aistudio?: AIStudio;
-  }
-}
 
 const INITIAL_SUGGESTIONS = [
   "Solve this complex logic puzzle: If a farmer has 17 sheep and all but 9 die, how many are left?",
   "Analyze the long-term impact of quantum computing on modern cryptography.",
-  "Write a detailed comparative essay on the architectural styles of Brunelleschi and Gaudí.",
-  "Explain the mathematical proof of the Pythagorean theorem using different methods."
+  "What's the quickest way to summarize a 50-page document?",
+  "Explain the mathematical proof of the Pythagorean theorem."
 ];
+
+// Tailwind class mappings to avoid dynamic string interpolation issues
+const modeColors: Record<PolarisMode, string> = {
+  standard: 'cyan',
+  fast: 'amber',
+  turbo: 'rose',
+  deep: 'purple'
+};
+
+const bgColors: Record<PolarisMode, string> = {
+  standard: 'bg-cyan-500',
+  fast: 'bg-amber-500',
+  turbo: 'bg-rose-500',
+  deep: 'bg-purple-500'
+};
+
+const textColors: Record<PolarisMode, string> = {
+  standard: 'text-cyan-500',
+  fast: 'text-amber-500',
+  turbo: 'text-rose-500',
+  deep: 'text-purple-500'
+};
+
+const borderColors: Record<PolarisMode, string> = {
+  standard: 'border-cyan-500/40',
+  fast: 'border-amber-500/40',
+  turbo: 'border-rose-500/40',
+  deep: 'border-purple-500/40'
+};
+
+const focusBorderColors: Record<PolarisMode, string> = {
+  standard: 'focus:border-cyan-400',
+  fast: 'focus:border-amber-400',
+  turbo: 'focus:border-rose-400',
+  deep: 'focus:border-purple-400'
+};
+
+const focusRingColors: Record<PolarisMode, string> = {
+  standard: 'focus:ring-cyan-500/50',
+  fast: 'focus:ring-amber-500/50',
+  turbo: 'focus:ring-rose-500/50',
+  deep: 'focus:ring-purple-500/50'
+};
+
+const glowGradients: Record<PolarisMode, string> = {
+  standard: 'bg-blue-900/10',
+  fast: 'bg-amber-900/10',
+  turbo: 'bg-rose-900/10',
+  deep: 'bg-purple-900/10'
+};
+
+const buttonGradients: Record<PolarisMode, string> = {
+  standard: 'from-blue-600 to-cyan-500',
+  fast: 'from-amber-600 to-orange-500',
+  turbo: 'from-rose-600 to-pink-500',
+  deep: 'from-purple-600 to-indigo-600'
+};
 
 export default function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [isDeepThinkEnabled, setIsDeepThinkEnabled] = useState(false);
+  const [mode, setMode] = useState<PolarisMode>('standard');
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -39,8 +83,9 @@ export default function App() {
 
   const checkApiKey = async () => {
     try {
-      if (window.aistudio) {
-        const hasKey = await window.aistudio.hasSelectedApiKey();
+      const aistudio = (window as any).aistudio;
+      if (aistudio) {
+        const hasKey = await aistudio.hasSelectedApiKey();
         setHasApiKey(hasKey || !!process.env.API_KEY);
       } else {
         setHasApiKey(!!process.env.API_KEY);
@@ -55,9 +100,9 @@ export default function App() {
   }, []);
 
   const handleConnectKey = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      // Assume success as per guidelines to avoid race conditions
+    const aistudio = (window as any).aistudio;
+    if (aistudio) {
+      await aistudio.openSelectKey();
       setHasApiKey(true);
     }
   };
@@ -85,18 +130,21 @@ export default function App() {
     e?.preventDefault();
     if ((!input.trim() && !selectedImage) || loadingState !== LoadingState.IDLE) return;
 
-    // Check key again before sending
     if (!hasApiKey && !process.env.API_KEY) {
       await handleConnectKey();
     }
 
-    const currentMode = isDeepThinkEnabled;
+    const currentMode = mode;
+    const currentInput = input;
+    const currentImage = selectedImage;
+
+    // Fix: Added missing timestamp to user message
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      text: input,
-      image: selectedImage || undefined,
-      isDeepThink: currentMode,
+      text: currentInput,
+      image: currentImage || undefined,
+      isDeepThink: currentMode === 'deep' || currentMode === 'turbo',
       timestamp: Date.now(),
     };
 
@@ -106,28 +154,23 @@ export default function App() {
     setLoadingState(LoadingState.THINKING);
 
     try {
-      const response = await generateResponse(userMessage.text, userMessage.image, currentMode);
+      const result = await generateResponse(currentInput, currentImage || undefined, currentMode);
       
-      const botMessage: Message = {
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: response.text,
-        groundingSources: response.groundingSources,
-        isDeepThink: currentMode,
+        text: result.text,
+        groundingSources: result.groundingSources,
+        isDeepThink: currentMode === 'deep',
         timestamp: Date.now(),
       };
       
-      setMessages(prev => [...prev, botMessage]);
+      setMessages(prev => [...prev, assistantMessage]);
     } catch (error: any) {
-      // If requested entity not found, it might be a key issue
-      if (error.message?.includes("Requested entity was not found")) {
-        setHasApiKey(false);
-      }
-
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: error instanceof Error ? error.message : "An unknown error occurred.",
+        text: error.message || "An unexpected error occurred.",
         isError: true,
         timestamp: Date.now(),
       };
@@ -137,177 +180,161 @@ export default function App() {
     }
   };
 
-  const handleSuggestionClick = (text: string) => {
-    setInput(text);
-    setIsDeepThinkEnabled(true);
-  };
-
   return (
-    <div className="flex flex-col h-[100dvh] bg-slate-950 text-slate-100 font-sans overflow-hidden selection:bg-cyan-500/30">
-      
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 glass-panel z-20 shadow-2xl relative shrink-0">
-        <div className="flex items-center gap-3">
-            <div className="relative w-7 h-7 md:w-8 md:h-8 flex items-center justify-center">
-                <div className={`absolute inset-0 ${isDeepThinkEnabled ? 'bg-purple-500' : 'bg-cyan-500'} blur-md opacity-40 rounded-full transition-colors duration-500`}></div>
-                <Compass className="relative text-white -rotate-45" size={24} />
-            </div>
-          <h1 className="text-lg md:text-2xl font-bold tracking-tight text-white">
-            Polaris <span className="text-cyan-500 text-sm md:text-base align-top ml-1">1.0</span>
-          </h1>
-        </div>
-        
-        <div className="flex items-center gap-2 md:gap-4">
-           {/* API Key Status */}
-           <div className="flex items-center">
-              {hasApiKey ? (
-                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-                  <ShieldCheck size={12} />
-                  Secure
-                </div>
-              ) : (
-                <button 
-                  onClick={handleConnectKey}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-bold uppercase tracking-wider hover:bg-red-500/20 transition-all animate-pulse"
-                >
-                  <ShieldAlert size={12} />
-                  Connect API
-                </button>
-              )}
-           </div>
+    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-500/30`}>
+      {/* Background elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className={`absolute -top-1/4 -right-1/4 w-1/2 h-1/2 rounded-full blur-[120px] opacity-20 ${bgColors[mode]}`}></div>
+        <div className={`absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 rounded-full blur-[120px] opacity-10 ${bgColors[mode]}`}></div>
+      </div>
 
-           <div className="hidden md:flex items-center gap-2 text-xs font-medium text-slate-400">
-              <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/50 border ${isDeepThinkEnabled ? 'border-purple-500/30 text-purple-400' : 'border-slate-800'} transition-all duration-300`}>
-                 <span className={`w-2 h-2 rounded-full ${loadingState === LoadingState.THINKING ? 'bg-green-500 animate-pulse' : 'bg-slate-600'}`}></span>
-                 {isDeepThinkEnabled ? '3 Pro' : '3 Flash'}
-              </span>
-           </div>
-           
-           <button 
-              onClick={() => setIsDeepThinkEnabled(!isDeepThinkEnabled)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-500 border ${isDeepThinkEnabled ? 'bg-purple-600/20 border-purple-500 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : 'bg-slate-900/50 border-slate-700 text-slate-400'}`}
-              title="Toggle Deep Thinking Mode"
-           >
-              {isDeepThinkEnabled ? <Brain size={16} className="animate-pulse" /> : <Zap size={16} />}
-              <span className="text-[10px] font-bold uppercase tracking-widest hidden xs:inline">{isDeepThinkEnabled ? 'Deep Think' : 'Standard'}</span>
-           </button>
+      {/* Header */}
+      <header className="sticky top-0 z-50 glass-panel border-b border-white/10 px-4 py-3 md:px-8 flex items-center justify-between backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${bgColors[mode]} shadow-lg`}>
+            <Compass className="text-white" size={20} />
+          </div>
+          <div>
+            <h1 className="font-bold text-lg md:text-xl tracking-tight">Polaris</h1>
+            <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold flex items-center gap-1.5">
+              <Activity size={10} className={textColors[mode]} />
+              AI Navigator
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 md:gap-4">
+          <button 
+            onClick={handleConnectKey}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${hasApiKey ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}
+          >
+            {hasApiKey ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
+            <span className="hidden sm:inline">{hasApiKey ? 'Connected' : 'Connect API'}</span>
+          </button>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 relative overflow-hidden flex flex-col w-full">
-        
-        {/* Background Ambient Glow */}
-        <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] transition-colors duration-1000 blur-[120px] -z-10 rounded-full pointer-events-none ${isDeepThinkEnabled ? 'bg-purple-900/10' : 'bg-blue-900/10'}`}></div>
-
-        {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto p-3 md:p-8 scroll-smooth z-0 w-full">
-          {messages.length === 0 ? (
-            <div className="min-h-full flex flex-col items-center justify-center py-6">
-              <div className="animate-float mb-6 md:mb-8 mt-4">
-                <Orb 
-                  state={loadingState === LoadingState.THINKING ? 'thinking' : 'idle'} 
-                  isDeepThink={isDeepThinkEnabled}
-                />
-              </div>
-              
-              <div className="text-center mb-8 max-w-md px-4">
-                <h2 className="text-xl md:text-2xl font-bold mb-2 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                  {isDeepThinkEnabled ? 'Ready for complex reasoning' : 'The North Star of Intelligence'}
-                </h2>
-                <p className="text-sm text-slate-500">
-                  {isDeepThinkEnabled 
-                    ? "Polaris 3 Pro is optimized for logic, math, and deep research tasks." 
-                    : "Ask Polaris anything for fast, accurate navigation through information."}
-                </p>
-                {!hasApiKey && (
-                   <div className="mt-4 p-3 bg-slate-900/80 border border-slate-800 rounded-xl inline-flex flex-col items-center gap-2">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Billing Required for Pro</p>
-                      <a 
-                        href="https://ai.google.dev/gemini-api/docs/billing" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors"
-                      >
-                        <LinkIcon size={12} /> View Billing Docs
-                      </a>
-                   </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl px-2">
-                {INITIAL_SUGGESTIONS.map((suggestion, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className="p-3 md:p-4 text-left rounded-xl glass-panel hover:bg-slate-800/50 hover:border-cyan-500/30 transition-all duration-300 text-xs md:text-sm text-slate-300 active:scale-95 flex items-center gap-3 group"
-                  >
-                    <div className="p-2 bg-slate-900 rounded-lg group-hover:bg-cyan-900/30 transition-colors">
-                      <Brain size={14} className="text-cyan-500" />
-                    </div>
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+      <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-8 flex flex-col overflow-hidden relative">
+        {messages.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 animate-in fade-in duration-1000">
+            <Orb 
+              state={loadingState === LoadingState.THINKING ? 'thinking' : 'idle'} 
+              isDeepThink={mode === 'deep'}
+              isFast={mode === 'fast'}
+              isTurbo={mode === 'turbo'}
+            />
+            
+            <div className="space-y-3">
+              <h2 className="text-2xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-300 to-slate-500">
+                How can I guide you today?
+              </h2>
+              <p className="text-slate-400 max-w-md mx-auto text-sm md:text-base">
+                Polaris is your advanced AI navigation system, capable of deep reasoning, fast responses, and visual analysis.
+              </p>
             </div>
-          ) : (
-            <div className="max-w-4xl mx-auto pb-4 w-full">
-              {messages.map((msg) => (
-                <MessageItem key={msg.id} message={msg} />
-              ))}
-              
-              {loadingState === LoadingState.THINKING && (
-                <div className="flex items-center gap-3 mb-8 animate-pulse px-2">
-                   <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full ${isDeepThinkEnabled ? 'bg-purple-600/20 border-purple-500/30' : 'bg-cyan-600/20 border-cyan-500/30'} border flex items-center justify-center`}>
-                        <div className={`w-1.5 h-1.5 md:w-2 md:h-2 ${isDeepThinkEnabled ? 'bg-purple-400' : 'bg-cyan-400'} rounded-full animate-ping`}></div>
-                   </div>
-                   <span className={`${isDeepThinkEnabled ? 'text-purple-400' : 'text-cyan-500'} text-xs md:text-sm font-medium`}>
-                     Polaris is {isDeepThinkEnabled ? 'conducting deep research...' : 'thinking...'}
-                   </span>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
 
-        {/* Input Area */}
-        <div className="p-3 md:p-6 z-10 max-w-4xl mx-auto w-full shrink-0">
-          {!hasApiKey && messages.length > 0 && (
-             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-between animate-in slide-in-from-bottom-2">
-                <span className="text-xs text-red-200">API Key required to continue.</span>
-                <button onClick={handleConnectKey} className="text-xs font-bold text-red-400 uppercase tracking-widest hover:text-red-300">Connect Now</button>
-             </div>
-          )}
-          <form onSubmit={handleSubmit} className="relative group">
-            {/* Image Preview */}
-            {selectedImage && (
-              <div className="absolute bottom-full mb-4 left-0 p-2 bg-slate-900/90 backdrop-blur rounded-lg border border-slate-700 shadow-xl animate-in fade-in slide-in-from-bottom-4">
-                <img 
-                  src={selectedImage} 
-                  alt="Preview" 
-                  className="h-16 md:h-24 w-auto rounded object-cover" 
-                />
-                <button 
-                  type="button"
-                  onClick={() => setSelectedImage(null)}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
+              {INITIAL_SUGGESTIONS.map((suggestion, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setInput(suggestion);
+                  }}
+                  className="p-4 rounded-xl glass-panel border border-white/5 hover:border-white/20 text-left text-sm text-slate-300 transition-all hover:bg-white/5 group"
                 >
-                  <X size={12} />
+                  <p className="group-hover:text-white transition-colors">{suggestion}</p>
                 </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            {messages.map((msg) => (
+              <MessageItem key={msg.id} message={msg} />
+            ))}
+            {loadingState === LoadingState.THINKING && (
+              <div className="flex items-start gap-4 mb-8 animate-in fade-in duration-500">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${bgColors[mode]} animate-pulse`}>
+                  <Compass className="text-white" size={20} />
+                </div>
+                <div className="flex flex-col gap-2">
+                   <div className="flex gap-1.5 mt-4">
+                      <div className={`w-2 h-2 rounded-full ${bgColors[mode]} animate-bounce [animation-delay:-0.3s]`}></div>
+                      <div className={`w-2 h-2 rounded-full ${bgColors[mode]} animate-bounce [animation-delay:-0.15s]`}></div>
+                      <div className={`w-2 h-2 rounded-full ${bgColors[mode]} animate-bounce`}></div>
+                   </div>
+                   <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Polaris is thinking...</p>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
+      </main>
+
+      {/* Input Area */}
+      <footer className="p-4 md:p-8 bg-gradient-to-t from-slate-950 to-transparent">
+        <div className="max-w-4xl mx-auto space-y-4">
+          
+          {/* Mode Selector */}
+          <div className="flex flex-wrap justify-center gap-2 mb-4">
+            {(['standard', 'fast', 'turbo', 'deep'] as PolarisMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`
+                  flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all
+                  ${mode === m 
+                    ? `${bgColors[m]} text-white shadow-lg shadow-${modeColors[m]}-500/20` 
+                    : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700'
+                  }
+                `}
+              >
+                {m === 'standard' && <Compass size={14} />}
+                {m === 'fast' && <Zap size={14} />}
+                {m === 'turbo' && <Bolt size={14} />}
+                {m === 'deep' && <Brain size={14} />}
+                <span className="capitalize">{m}</span>
+              </button>
+            ))}
+          </div>
+
+          <form 
+            onSubmit={handleSubmit}
+            className={`
+              relative glass-panel rounded-2xl md:rounded-3xl border ${borderColors[mode]}
+              transition-all duration-300 shadow-2xl overflow-hidden
+            `}
+          >
+            {selectedImage && (
+              <div className="p-3 border-b border-white/5 flex items-center gap-3 bg-white/5">
+                <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 shadow-md">
+                  <img src={selectedImage} alt="Selected" className="w-full h-full object-cover" />
+                  <button 
+                    onClick={() => setSelectedImage(null)}
+                    className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <div className="text-xs text-slate-400">
+                  <p className="font-semibold text-slate-300 text-sm">Image Attached</p>
+                  <p>Polaris will analyze this visual input.</p>
+                </div>
               </div>
             )}
 
-            <div className="relative flex items-center">
-              {/* File Input Trigger */}
+            <div className="flex items-center p-2 md:p-3 gap-2">
               <button 
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute left-2 md:left-3 p-2 text-slate-400 hover:text-cyan-400 transition-colors rounded-full hover:bg-slate-800"
+                className={`p-2 md:p-3 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white transition-colors`}
                 title="Upload image"
               >
                 <ImageIcon size={20} />
               </button>
+              
               <input 
                 type="file"
                 ref={fileInputRef}
@@ -316,38 +343,41 @@ export default function App() {
                 className="hidden"
               />
 
-              {/* Text Input */}
-              <input
-                type="text"
+              <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={isDeepThinkEnabled ? "Ask a complex question for deep analysis..." : "Ask Polaris anything..."}
-                className={`w-full bg-slate-900/80 backdrop-blur-md border ${isDeepThinkEnabled ? 'border-purple-500/40 focus:border-purple-400 focus:ring-purple-500/50' : 'border-slate-700 focus:border-cyan-500 focus:ring-cyan-500/50'} text-slate-100 rounded-2xl py-3 pl-11 md:pl-14 pr-11 md:pr-14 focus:outline-none focus:ring-1 transition-all shadow-lg placeholder:text-slate-500 text-sm md:text-base`}
-                disabled={loadingState !== LoadingState.IDLE}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                placeholder={`Ask Polaris anything (${mode})...`}
+                className={`
+                  flex-1 bg-transparent border-none focus:ring-0 text-slate-100 placeholder:text-slate-500
+                  resize-none py-2 md:py-3 max-h-32 text-sm md:text-base custom-scrollbar
+                `}
+                rows={1}
               />
 
-              {/* Submit Button */}
-              <button 
+              <button
                 type="submit"
                 disabled={(!input.trim() && !selectedImage) || loadingState !== LoadingState.IDLE}
                 className={`
-                  absolute right-2 md:right-3 p-2 rounded-xl transition-all duration-300
-                  ${(!input.trim() && !selectedImage) || loadingState !== LoadingState.IDLE 
-                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
-                    : isDeepThinkEnabled 
-                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 active:scale-95'
-                      : 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 active:scale-95'}
+                  p-2 md:p-3 rounded-xl bg-gradient-to-r ${buttonGradients[mode]} text-white
+                  disabled:opacity-50 disabled:grayscale transition-all hover:scale-105 active:scale-95 shadow-lg
                 `}
               >
-                <Send size={18} />
+                <Send size={20} />
               </button>
             </div>
           </form>
-          <p className="text-center text-slate-600 text-[10px] mt-2 md:mt-3 flex items-center justify-center gap-1">
-            <Zap size={10} /> Powered by Gemini 3 series • {isDeepThinkEnabled ? 'Deep Thinking Active' : 'Standard Navigation'}
+          
+          <p className="text-[10px] text-center text-slate-600 uppercase tracking-widest font-bold">
+            Powered by Gemini · Advanced AI Navigation
           </p>
         </div>
-      </main>
+      </footer>
     </div>
   );
 }
