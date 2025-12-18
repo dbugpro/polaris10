@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, X, Compass, Brain, Zap, Bolt, Activity, Key, CheckCircle2 } from 'lucide-react';
+import { Send, Image as ImageIcon, X, Compass, Brain, Zap, Bolt, Activity, Key, CheckCircle2, Info } from 'lucide-react';
 import { Message, LoadingState } from './types';
 import { generateResponse, PolarisMode } from './services/geminiService';
 import { MessageItem } from './components/MessageItem';
@@ -48,6 +48,7 @@ export default function App() {
   const [mode, setMode] = useState<PolarisMode>('standard');
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [isAiStudioEnv, setIsAiStudioEnv] = useState(false);
+  const [showQuotaTip, setShowQuotaTip] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,6 +117,7 @@ export default function App() {
         timestamp: Date.now(),
       }]);
     } catch (err: any) {
+      const isQuotaError = err.message.includes('capacity') || err.message.includes('Limit');
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'model',
@@ -123,6 +125,7 @@ export default function App() {
         isError: true,
         timestamp: Date.now(),
       }]);
+      if (isQuotaError) setShowQuotaTip(true);
     } finally {
       setLoadingState(LoadingState.IDLE);
     }
@@ -132,14 +135,14 @@ export default function App() {
     <div className="flex flex-col h-screen bg-slate-950 text-white overflow-hidden selection:bg-cyan-500/30">
       <header className="flex items-center justify-between px-6 py-3 glass-panel border-b border-white/5 z-20">
         <div className="flex items-center gap-3">
-          <div className={`p-1.5 rounded-lg ${bgColors[mode]} transition-colors duration-500`}>
+          <div className={`p-1.5 rounded-lg ${bgColors[mode]} transition-colors duration-500 shadow-lg shadow-black/40`}>
              <Compass className="text-white" size={20} />
           </div>
           <h1 className="text-lg font-bold tracking-tighter text-white">POLARIS</h1>
         </div>
 
         <div className="flex items-center gap-3">
-           <div className="hidden sm:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
+           <div className="hidden sm:flex items-center gap-1 bg-black/30 p-1 rounded-full border border-white/10">
             <button onClick={() => setMode('fast')} title="Fast Mode" className={`p-1.5 rounded-full transition-all ${mode === 'fast' ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}><Bolt size={16} /></button>
             <button onClick={() => setMode('standard')} title="Standard Mode" className={`p-1.5 rounded-full transition-all ${mode === 'standard' ? 'bg-cyan-500 text-black' : 'text-slate-400 hover:text-white'}`}><Zap size={16} /></button>
             <button onClick={() => setMode('turbo')} title="Turbo Mode" className={`p-1.5 rounded-full transition-all ${mode === 'turbo' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'}`}><Activity size={16} /></button>
@@ -164,7 +167,9 @@ export default function App() {
             <Orb state="idle" isDeepThink={mode === 'deep'} isFast={mode === 'fast'} isTurbo={mode === 'turbo'} />
             <div className="text-center space-y-2">
                <h2 className="text-xl md:text-2xl font-light tracking-[0.2em] text-slate-300 uppercase">System Active</h2>
-               <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Free Tier · Deep Thinking Enabled</p>
+               <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold flex items-center justify-center gap-2">
+                 Free Tier <span className="w-1 h-1 rounded-full bg-slate-700"></span> Multimodal Navigation
+               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
               {INITIAL_SUGGESTIONS.map(s => (
@@ -187,6 +192,16 @@ export default function App() {
                    <Activity className="animate-spin" size={18} />
                 </div>
                 <span className="text-xs font-bold uppercase tracking-[0.2em]">Navigating Knowledge...</span>
+              </div>
+            )}
+            {showQuotaTip && (
+              <div className="mx-auto max-w-lg p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex gap-3 items-start animate-in slide-in-from-top-4 duration-500">
+                <Info className="text-amber-500 shrink-0 mt-0.5" size={18} />
+                <div className="text-xs text-amber-200/80 leading-relaxed">
+                  <p className="font-bold text-amber-500 uppercase mb-1">Free Tier Advisory</p>
+                  Polaris operates on Google's free API tier. If you see rate limit errors frequently, try switching to <strong>Fast Mode</strong> or wait 1 minute for your quota to reset.
+                  <button onClick={() => setShowQuotaTip(false)} className="block mt-2 font-bold hover:underline">Dismiss</button>
+                </div>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -234,11 +249,11 @@ export default function App() {
               <ImageIcon size={20} />
             </button>
             
-            <input type="file" ref={fileInputRef} hidden onChange={handleImageUpload} accept="image/*" />
+            <input type="file" hidden ref={fileInputRef} onChange={handleImageUpload} accept="image/*" />
             
             <input 
               className="flex-1 bg-transparent border-none focus:ring-0 px-4 py-4 text-sm md:text-base text-white placeholder:text-slate-600" 
-              placeholder={`Communicate with Polaris (${mode})...`}
+              placeholder={`Ask Polaris (${mode})...`}
               value={input}
               onChange={e => setInput(e.target.value)}
             />
@@ -252,7 +267,7 @@ export default function App() {
             </button>
           </form>
           <div className="mt-3 text-center">
-             <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.3em]">Precision Engineering · Zero Subscription Cost</p>
+             <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.3em]">Precision AI · Powered by Gemini Flash</p>
           </div>
         </div>
       </footer>

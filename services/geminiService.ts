@@ -12,7 +12,7 @@ export const generateResponse = async (
     const apiKey = process.env.API_KEY;
     
     if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
-      throw new Error("API Key is not configured. Please use a valid environment key.");
+      throw new Error("API Key is missing. Please check your environment variables or connect a key.");
     }
     
     const ai = new GoogleGenAI({ apiKey });
@@ -42,7 +42,6 @@ export const generateResponse = async (
       model: modelToUse,
       contents: { parts },
       config: {
-        // Search is not available for all models/configs, using it where appropriate
         ...(mode !== 'fast' && mode !== 'turbo' ? { tools: [{ googleSearch: {} }] } : {}),
         systemInstruction: `You are Polaris, an advanced AI navigator. Your interface is a glowing orb. You are helpful, precise, and knowledgeable. Mode: ${mode}.`,
         ...(mode === 'deep' ? {
@@ -82,6 +81,12 @@ export const generateResponse = async (
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
+    
+    // Check for rate limit / quota exceeded errors
+    if (error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+      throw new Error("Polaris is at capacity (Rate Limit). The free tier allows limited requests per minute. Please wait 60 seconds and try again.");
+    }
+    
     throw new Error(error.message || "An unexpected error occurred.");
   }
 };
