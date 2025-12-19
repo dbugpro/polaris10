@@ -258,10 +258,10 @@ export default function App() {
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const animate = useCallback(() => {
-    // 1. Position Spring (Slow and graceful return to 0,0)
+    // 1. Position Spring (Slow, elegant return to center)
     if (!state.isDragging) {
-      const springStrength = 0.015; // Lower for slower, floaty return
-      const damping = 0.94; // Higher for smoother settle
+      const springStrength = 0.012; // Tuned for a heavy, graceful return
+      const damping = 0.95; // High damping for smooth settling
 
       velRef.current.vx += (0 - posRef.current.x) * springStrength;
       velRef.current.vy += (0 - posRef.current.y) * springStrength;
@@ -272,8 +272,8 @@ export default function App() {
       velRef.current.vx *= damping;
       velRef.current.vy *= damping;
 
-      const threshold = 0.01;
-      if (Math.abs(posRef.current.x) < threshold && Math.abs(posRef.current.y) < threshold && Math.abs(velRef.current.vx) < threshold) {
+      const posThreshold = 0.01;
+      if (Math.abs(posRef.current.x) < posThreshold && Math.abs(posRef.current.y) < posThreshold && Math.abs(velRef.current.vx) < posThreshold) {
         posRef.current.x = 0;
         posRef.current.y = 0;
         velRef.current.vx = 0;
@@ -283,29 +283,28 @@ export default function App() {
 
     // 2. Scale Spring (Graceful return to scale 1)
     if (!state.isCharging && !state.isCrazy && !state.isPressed) {
-      const scaleSpring = 0.01;
-      const scaleDamping = 0.9;
+      const scaleSpring = 0.008; // Slower return
+      const scaleDamping = 0.92;
       
       scaleVelRef.current += (1 - scaleRef.current) * scaleSpring;
       scaleRef.current += scaleVelRef.current;
       scaleVelRef.current *= scaleDamping;
 
-      if (Math.abs(1 - scaleRef.current) < 0.001 && Math.abs(scaleVelRef.current) < 0.001) {
+      const scaleThreshold = 0.001;
+      if (Math.abs(1 - scaleRef.current) < scaleThreshold && Math.abs(scaleVelRef.current) < scaleThreshold) {
         scaleRef.current = 1;
         scaleVelRef.current = 0;
       }
     } else if (state.isCharging) {
-      // Scale up during charging
-      scaleRef.current = Math.min(scaleRef.current + 0.02, 1.4);
+      scaleRef.current = Math.min(scaleRef.current + 0.015, 1.4);
     } else if (state.isPressed) {
-      // Slight shrink on press
       scaleRef.current = Math.max(scaleRef.current - 0.01, 0.95);
     }
 
     // Sync State
     setState(prev => {
-      const posChanged = prev.dragOffset.x !== posRef.current.x || prev.dragOffset.y !== posRef.current.y;
-      const scaleChanged = prev.scale !== scaleRef.current;
+      const posChanged = Math.abs(prev.dragOffset.x - posRef.current.x) > 0.001 || Math.abs(prev.dragOffset.y - posRef.current.y) > 0.001;
+      const scaleChanged = Math.abs(prev.scale - scaleRef.current) > 0.001;
       
       if (!posChanged && !scaleChanged) return prev;
       
@@ -349,6 +348,7 @@ export default function App() {
       posRef.current = { x: 0, y: 0 };
       velRef.current = { vx: 0, vy: 0 };
       scaleRef.current = 1;
+      scaleVelRef.current = 0;
     }, duration + 9000);
   };
 
@@ -367,6 +367,7 @@ export default function App() {
       posRef.current = { x: 0, y: 0 };
       velRef.current = { vx: 0, vy: 0 };
       scaleRef.current = 1;
+      scaleVelRef.current = 0;
     }, 2000);
   };
 
@@ -521,10 +522,12 @@ export default function App() {
         audio.playSfx('burst');
       }}
     >
+      {/* Supernova Reset Effect */}
       {state.crazyStage === 'supernova' && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-white animate-supernova pointer-events-none" />
       )}
 
+      {/* Background Journey Layers */}
       <div className={`absolute inset-0 transition-all duration-[3000ms] pointer-events-none ${state.isCrazy ? 'opacity-100' : 'opacity-0'}`}>
         {state.crazyStage === 'stargate' && (
           <div className="absolute inset-0 flex items-center justify-center stargate-tunnel">
@@ -568,14 +571,21 @@ export default function App() {
         )}
       </div>
 
-      <div 
-        className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-[opacity] duration-[1500ms] ease-out ${state.crazyStage === 'stargate' ? 'scale-0 blur-xl opacity-0' : 'opacity-100'}`}
-        style={{ transform: `translate(${state.dragOffset.x}px, ${state.dragOffset.y}px) scale(${state.scale})` }}
-      >
-        <Orb 
-          state={state.voiceState === 'speaking' ? 'speaking' : (state.voiceState === 'listening') ? 'thinking' : 'idle'} 
-          interactive={state}
-        />
+      {/* 
+          CRITICAL CENTERING: 
+          'absolute inset-0 flex items-center justify-center' ensures the inner container 
+          is exactly at the center (width and height) of the viewport.
+      */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div 
+          className={`pointer-events-auto transition-[opacity] duration-[1500ms] ease-out ${state.crazyStage === 'stargate' ? 'scale-0 blur-xl opacity-0' : 'opacity-100'}`}
+          style={{ transform: `translate(${state.dragOffset.x}px, ${state.dragOffset.y}px) scale(${state.scale})` }}
+        >
+          <Orb 
+            state={state.voiceState === 'speaking' ? 'speaking' : (state.voiceState === 'listening') ? 'thinking' : 'idle'} 
+            interactive={state}
+          />
+        </div>
       </div>
 
       <div className="absolute bottom-10 left-0 w-full flex flex-col items-center gap-2 pointer-events-none">
