@@ -19,27 +19,22 @@ export const Orb: React.FC<OrbProps> = ({ state, interactive }) => {
   const clickCount = interactive?.clickCount || 0;
 
   // Derive dynamic intensities
-  const glowOpacity = isCharging ? 'opacity-60' : (isHovered || voiceState !== 'idle') ? 'opacity-30' : 'opacity-10';
-  const rotationSpeed = isCharging ? '[animation-duration:2s]' : isHovered ? '[animation-duration:8s]' : '[animation-duration:12s]';
-  const coreScale = isCharging ? 'scale-150' : isPressed ? 'scale-90' : 'scale-100';
+  const glowOpacity = isCharging ? 'opacity-30' : (isHovered || voiceState !== 'idle') ? 'opacity-20' : 'opacity-10';
+  const rotationSpeed = isCharging ? '[animation-duration:5s]' : isHovered ? '[animation-duration:15s]' : '[animation-duration:20s]';
+  const coreScale = isCharging ? 'scale-105' : isPressed ? 'scale-95' : 'scale-100';
 
-  // Voice Color Mapping - strictly blue spectrum
+  // High-fidelity "Silky Blue" Material Model
   const getBaseColor = () => {
-    // Azure Flare for click count 3 (previously Emerald)
-    if (clickCount === 3) return 'radial-gradient(circle at 35% 35%, #f0f9ff 0%, #0ea5e9 40%, #0369a1 80%, #0c4a6e 100%)';
-    
-    if (voiceState === 'speaking') return 'radial-gradient(circle at 35% 35%, #fff 0%, #38bdf8 30%, #0284c7 70%, #0c4a6e 100%)';
-    if (voiceState === 'listening') return 'radial-gradient(circle at 35% 35%, #e0f2fe 0%, #0ea5e9 40%, #075985 80%, #0c4a6e 100%)';
-    if (isCharging) return 'radial-gradient(circle at 35% 35%, #fff 0%, #7dd3fc 20%, #0369a1 50%, #082f49 100%)';
-    return 'radial-gradient(circle at 35% 35%, #38bdf8 0%, #0ea5e9 25%, #0284c7 50%, #0369a1 75%, #0c4a6e 100%)';
+    // Advanced radial gradient with more stops for smoother transition
+    if (clickCount === 3) {
+      return 'radial-gradient(circle at 30% 30%, #a5f3fc 0%, #38bdf8 20%, #0ea5e9 45%, #0284c7 70%, #0c4a6e 100%)';
+    }
+    if (voiceState === 'speaking') {
+      return 'radial-gradient(circle at 30% 30%, #e0f2fe 0%, #7dd3fc 15%, #0ea5e9 40%, #0369a1 75%, #082f49 100%)';
+    }
+    return 'radial-gradient(circle at 30% 30%, #7dd3fc 0%, #38bdf8 12%, #0ea5e9 35%, #0284c7 65%, #075985 85%, #082f49 100%)';
   };
 
-  const burstAnimation = useMemo(() => {
-    if (burstCount === 0) return '';
-    return 'animate-[ping_0.8s_ease-out_1]';
-  }, [burstCount]);
-
-  // Click based visual modifiers
   const clickAnimations = useMemo(() => {
     let anims = [];
     if (clickCount === 4) anims.push('animate-breath');
@@ -47,74 +42,67 @@ export const Orb: React.FC<OrbProps> = ({ state, interactive }) => {
     return anims.join(' ');
   }, [clickCount]);
 
-  const ghostOpacity = clickCount === 6 ? 'opacity-20 blur-sm' : 'opacity-100';
-
   return (
-    <div className={`relative flex items-center justify-center w-64 h-64 sm:w-80 sm:h-80 md:w-[32rem] md:h-[32rem] transition-all duration-700 ${isDragging ? 'animate-none' : 'animate-float'} ${clickAnimations} ${ghostOpacity}`}>
+    <div className={`relative flex items-center justify-center w-64 h-64 sm:w-80 sm:h-80 md:w-[32rem] md:h-[32rem] transition-all duration-1000 ${clickCount === 6 ? 'opacity-50 blur-[2px]' : 'opacity-100'}`}>
       
-      {/* 1. Outer Ethereal Nebula Glow - strictly blue shades */}
-      <div className={`
-        absolute inset-0 rounded-full blur-[120px] transition-all duration-1000
-        ${glowOpacity}
-        ${clickCount === 3 ? 'bg-sky-400' : voiceState === 'speaking' ? 'bg-blue-400' : 'bg-blue-600'}
-        ${isCharging || voiceState !== 'idle' ? 'animate-pulse' : 'animate-[pulse_12s_ease-in-out_infinite]'}
-      `}></div>
-      
-      {/* 2. Secondary Pulse layer - strictly blue shades */}
-      <div className={`
-        absolute inset-10 rounded-full blur-[80px] transition-all duration-500
-        ${clickCount === 3 ? 'bg-blue-500' : voiceState === 'speaking' ? 'bg-sky-300 opacity-40' : 'bg-sky-700'}
-        ${isCharging ? 'opacity-40 scale-125' : isHovered ? 'opacity-25' : 'opacity-15'}
-      `}></div>
-      
-      {/* 3. Voice/Interaction Ripples - blue shades */}
-      {(voiceState !== 'idle' || hasRipple || clickCount === 2) && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className={`absolute w-full h-full rounded-full border border-blue-400/30 ${voiceState === 'speaking' ? 'animate-[ping_0.5s_linear_infinite]' : 'animate-[ping_2s_linear_infinite]'}`}></div>
-          <div className={`absolute w-3/4 h-3/4 rounded-full border border-blue-400/10 animate-[ping_3s_linear_infinite]`}></div>
-        </div>
-      )}
-
-      {/* 4. Double Click Burst Effect - blue shades */}
-      {(burstCount > 0 || clickCount === 2) && (
-        <div className={`absolute inset-[-20%] rounded-full border-4 border-blue-400/50 blur-sm ${burstAnimation}`}></div>
-      )}
-
-      {/* 5. The Core Sphere */}
-      <div 
-        className={`
-          relative w-[75%] h-[75%] rounded-full 
-          transition-all duration-500 ease-out
-          flex items-center justify-center
-          overflow-hidden
-          ${coreScale}
-          ${voiceState === 'speaking' ? 'shadow-[0_0_120px_rgba(56,189,248,0.6)]' : ''}
-          ${clickCount === 3 ? 'shadow-[0_0_120px_rgba(14,165,233,0.6)]' : ''}
-          ${isCharging ? 'shadow-[0_0_150px_rgba(56,189,248,0.8)]' : isHovered ? 'shadow-[0_0_100px_rgba(14,165,233,0.4)]' : 'shadow-[0_0_60px_rgba(14,165,233,0.2)]'}
-          ${state === 'idle' && !isPressed && voiceState === 'idle' ? 'animate-[pulse_10s_ease-in-out_infinite]' : ''}
-        `}
-        style={{ background: getBaseColor() }}
-      >
-        {/* Specular Highlight */}
-        <div className={`
-          absolute top-[22%] left-[22%] w-[18%] h-[18%] bg-white/40 blur-md rounded-full transition-all duration-300
-          ${isHovered ? 'translate-x-1 translate-y-1' : ''}
-        `}></div>
+      <div className={`relative w-full h-full flex items-center justify-center transition-transform duration-700 ${isDragging ? 'animate-none' : 'animate-float'} ${clickAnimations}`}>
         
-        {/* Rim Light */}
-        <div className="absolute inset-0 rounded-full border border-white/10 ring-1 ring-inset ring-white/5"></div>
-
-        {/* Dynamic Activity Rings */}
-        <div className={`absolute inset-0 w-full h-full animate-spin-slow ${rotationSpeed}`}>
-          <div className={`absolute top-1/2 left-1/2 w-[110%] h-[110%] -translate-x-1/2 -translate-y-1/2 rounded-full border-t border-b border-white/10 blur-[2px] ${voiceState !== 'idle' ? 'border-blue-200/20 shadow-[0_0_10px_blue]' : ''}`}></div>
-        </div>
-
-        {/* Internal Core Pulsation */}
+        {/* Ambient Bloom */}
         <div className={`
-          absolute w-1/3 h-1/3 bg-white/10 blur-3xl rounded-full transition-all duration-700
-          ${isCharging || voiceState === 'speaking' || clickCount === 3 ? 'bg-white/40 opacity-100 scale-150' : 'opacity-100 scale-100'}
-          ${voiceState !== 'idle' || isCharging ? 'animate-pulse' : 'animate-[pulse_15s_ease-in-out_infinite]'}
+          absolute inset-[-5%] rounded-full blur-[80px] transition-all duration-1000
+          ${glowOpacity} bg-blue-500/20
+          ${isCharging || voiceState !== 'idle' ? 'animate-subtle-pulse' : 'animate-[subtle-pulse_20s_ease-in-out_infinite]'}
         `}></div>
+
+        {/* The Material Core */}
+        <div 
+          className={`
+            relative w-[65%] h-[65%] rounded-full 
+            transition-all duration-700 ease-out
+            flex items-center justify-center
+            overflow-hidden
+            ${coreScale}
+            shadow-[inset_-15px_-15px_40px_rgba(0,0,0,0.7),inset_10px_10px_30px_rgba(255,255,255,0.1),0_40px_80px_-20px_rgba(0,0,0,0.9)]
+          `}
+          style={{ background: getBaseColor() }}
+        >
+          {/* Surface Texture Layer: Micro-grain for physical realism */}
+          <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay pointer-events-none" 
+               style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}>
+          </div>
+
+          {/* Primary Specular Highlight - Main Light Source Hit */}
+          <div className={`
+            absolute top-[15%] left-[15%] w-[35%] h-[35%] bg-white/25 blur-[20px] rounded-full transition-all duration-500
+            ${isHovered ? 'scale-105 opacity-40' : 'opacity-30'}
+          `}></div>
+
+          {/* Core Specular Dot - Sharp Pinpoint */}
+          <div className={`
+            absolute top-[24%] left-[24%] w-[5%] h-[5%] bg-white/60 blur-[3px] rounded-full transition-all duration-500
+            ${isHovered ? 'opacity-100' : 'opacity-50'}
+          `}></div>
+
+          {/* Secondary Soft Reflection - Bottom Left lustre */}
+          <div className="absolute bottom-[20%] left-[20%] w-[30%] h-[30%] bg-blue-300/5 blur-[25px] rounded-full"></div>
+          
+          {/* Rim Lighting (Fresnel) - Edge definition */}
+          <div className="absolute inset-0 rounded-full border border-white/10 ring-[1.5px] ring-inset ring-white/5 pointer-events-none"></div>
+
+          {/* Deep Core Shadow - Bottom Right grounding */}
+          <div className="absolute bottom-[-5%] right-[-5%] w-[55%] h-[55%] bg-black/50 blur-[45px] rounded-full"></div>
+
+          {/* Dynamic Energy Veins - Sub-surface activity */}
+          <div className={`absolute inset-0 w-full h-full animate-spin-slow ${rotationSpeed} opacity-[0.08]`}>
+            <div className="absolute top-1/2 left-1/2 w-[120%] h-[120%] -translate-x-1/2 -translate-y-1/2 rounded-full border-[0.5px] border-blue-100/20 blur-[3px]"></div>
+          </div>
+
+          {/* Global Material Overlay - Ties the lighting together */}
+          <div className={`
+            absolute inset-0 bg-blue-400/5 mix-blend-soft-light transition-opacity duration-1000
+            ${voiceState !== 'idle' || isCharging ? 'opacity-100' : 'opacity-20'}
+          `}></div>
+        </div>
       </div>
     </div>
   );

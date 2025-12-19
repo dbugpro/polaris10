@@ -23,6 +23,8 @@ class PolarisAudio {
   ctx: AudioContext | null = null;
   master: GainNode | null = null;
   reverbBus: GainNode | null = null;
+  driftOsc: OscillatorNode | null = null;
+  driftGain: GainNode | null = null;
   
   scales = {
     A_MINOR_PENT: [110, 130.81, 146.83, 164.81, 196.0], 
@@ -41,6 +43,11 @@ class PolarisAudio {
     this.reverbBus = this.ctx.createGain();
     this.reverbBus.gain.value = 0.3;
     this.reverbBus.connect(this.master);
+
+    // Continuous Drift Gain
+    this.driftGain = this.ctx.createGain();
+    this.driftGain.gain.value = 0;
+    this.driftGain.connect(this.master);
 
     this.startSentientEngine();
   }
@@ -95,70 +102,42 @@ class PolarisAudio {
     }
   }
 
-  playStargate(intensity: number) {
-    if (!this.ctx || !this.master) return;
-    this.mood = 'chaos';
-    const now = this.ctx.currentTime;
-    const duration = 6 + (intensity * 2);
-    for (let i = 0; i < (20 + intensity * 5); i++) {
-      const osc = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      osc.type = Math.random() > 0.8 ? 'triangle' : 'sine';
-      osc.frequency.setValueAtTime(220 + (i * 5), now);
-      osc.frequency.exponentialRampToValueAtTime(55 + (i * 2) + Math.random() * 200, now + duration);
-      g.gain.setValueAtTime(0, now);
-      g.gain.linearRampToValueAtTime(0.05 + (intensity * 0.01), now + 1);
-      g.gain.linearRampToValueAtTime(0, now + duration);
-      osc.connect(g);
-      g.connect(this.master);
-      osc.start(now);
-      osc.stop(now + duration);
+  setDriftIntensity(intensity: number) {
+    if (!this.ctx || !this.driftGain) return;
+    // Smoothly transition volume of the return drift sound
+    this.driftGain.gain.setTargetAtTime(intensity * 0.15, this.ctx.currentTime, 0.1);
+    
+    if (intensity > 0 && !this.driftOsc) {
+      this.driftOsc = this.ctx.createOscillator();
+      this.driftOsc.type = 'sine';
+      this.driftOsc.frequency.setValueAtTime(55, this.ctx.currentTime);
+      this.driftOsc.connect(this.driftGain);
+      this.driftOsc.start();
+    } else if (intensity === 0 && this.driftOsc) {
+      const oldOsc = this.driftOsc;
+      this.driftOsc = null;
+      setTimeout(() => oldOsc.stop(), 500);
+    }
+    
+    if (this.driftOsc) {
+      this.driftOsc.frequency.setTargetAtTime(55 + (intensity * 110), this.ctx.currentTime, 0.2);
     }
   }
 
-  playMilkyWay() {
-    if (!this.ctx || !this.master) return;
-    const now = this.ctx.currentTime;
-    for (let i = 0; i < 12; i++) {
-      const note = 880 * Math.pow(1.059, [0, 2, 4, 7, 9][i % 5]);
-      const osc = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(note, now + i * 0.2);
-      g.gain.setValueAtTime(0, now + i * 0.2);
-      g.gain.linearRampToValueAtTime(0.05, now + i * 0.2 + 0.1);
-      g.gain.linearRampToValueAtTime(0, now + i * 0.2 + 2);
-      osc.connect(g);
-      g.connect(this.master);
-      osc.start(now + i * 0.2);
-      osc.stop(now + i * 0.2 + 2);
-    }
-  }
-
-  playSupernova() {
-    if (!this.ctx || !this.master) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(1, now);
-    osc.frequency.exponentialRampToValueAtTime(1000, now + 2);
-    g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.5, now + 0.5);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
-    osc.connect(g);
-    g.connect(this.master);
-    osc.start(now);
-    osc.stop(now + 2.5);
-  }
-
-  playSfx(type: 'click' | 'hover' | 'charge' | 'burst' | 'connect' | 'glitch' | 'breath' | 'ghost' | 'emerald') {
+  playSfx(type: 'click' | 'hover' | 'charge' | 'burst' | 'connect' | 'glitch' | 'breath' | 'ghost' | 'emerald' | 'settle') {
     if (!this.ctx || !this.master) return;
     const g = this.ctx.createGain();
     const osc = this.ctx.createOscillator();
     g.connect(this.master);
     osc.connect(g);
     switch (type) {
+      case 'settle':
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1320, this.ctx.currentTime); // E6
+        g.gain.setValueAtTime(0, this.ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0.1, this.ctx.currentTime + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 1.2);
+        break;
       case 'click':
         osc.frequency.setValueAtTime(440, this.ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(220, this.ctx.currentTime + 0.1);
@@ -220,6 +199,63 @@ class PolarisAudio {
     osc.start();
     osc.stop(this.ctx.currentTime + 3);
   }
+
+  playStargate(intensity: number) {
+    if (!this.ctx || !this.master) return;
+    this.mood = 'chaos';
+    const now = this.ctx.currentTime;
+    const duration = 6 + (intensity * 2);
+    for (let i = 0; i < (20 + intensity * 5); i++) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = Math.random() > 0.8 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(220 + (i * 5), now);
+      osc.frequency.exponentialRampToValueAtTime(55 + (i * 2) + Math.random() * 200, now + duration);
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.05 + (intensity * 0.01), now + 1);
+      g.gain.linearRampToValueAtTime(0, now + duration);
+      osc.connect(g);
+      g.connect(this.master);
+      osc.start(now);
+      osc.stop(now + duration);
+    }
+  }
+
+  playMilkyWay() {
+    if (!this.ctx || !this.master) return;
+    const now = this.ctx.currentTime;
+    for (let i = 0; i < 12; i++) {
+      const note = 880 * Math.pow(1.059, [0, 2, 4, 7, 9][i % 5]);
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(note, now + i * 0.2);
+      g.gain.setValueAtTime(0, now + i * 0.2);
+      g.gain.linearRampToValueAtTime(0.05, now + i * 0.2 + 0.1);
+      g.gain.linearRampToValueAtTime(0, now + i * 0.2 + 2);
+      osc.connect(g);
+      g.connect(this.master);
+      osc.start(now + i * 0.2);
+      osc.stop(now + i * 0.2 + 2);
+    }
+  }
+
+  playSupernova() {
+    if (!this.ctx || !this.master) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1, now);
+    osc.frequency.exponentialRampToValueAtTime(1000, now + 2);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.5, now + 0.5);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+    osc.connect(g);
+    g.connect(this.master);
+    osc.start(now);
+    osc.stop(now + 2.5);
+  }
 }
 
 const audio = new PolarisAudio();
@@ -249,6 +285,9 @@ export default function App() {
   const scaleVelRef = useRef(0);
   const requestRef = useRef<number>();
   const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Homing tracker for audio logic
+  const isHomingRef = useRef(false);
 
   const sessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -258,13 +297,19 @@ export default function App() {
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const animate = useCallback(() => {
-    // 1. Position Spring (Slow, elegant return to center)
+    // 1. Organic Position Spring (Slower return with curved path)
     if (!state.isDragging) {
-      const springStrength = 0.012; // Tuned for a heavy, graceful return
-      const damping = 0.95; // High damping for smooth settling
+      // Significantly reduced strength for a weightier, more intentional glide
+      const springStrength = 0.006; 
+      const damping = 0.96; 
+      
+      // Add drift variance (sine wobble) for an organic path
+      const time = Date.now() * 0.002;
+      const driftX = Math.sin(time) * 0.08;
+      const driftY = Math.cos(time * 0.7) * 0.08;
 
-      velRef.current.vx += (0 - posRef.current.x) * springStrength;
-      velRef.current.vy += (0 - posRef.current.y) * springStrength;
+      velRef.current.vx += (0 - posRef.current.x) * springStrength + driftX;
+      velRef.current.vy += (0 - posRef.current.y) * springStrength + driftY;
 
       posRef.current.x += velRef.current.vx;
       posRef.current.y += velRef.current.vy;
@@ -272,18 +317,38 @@ export default function App() {
       velRef.current.vx *= damping;
       velRef.current.vy *= damping;
 
-      const posThreshold = 0.01;
-      if (Math.abs(posRef.current.x) < posThreshold && Math.abs(posRef.current.y) < posThreshold && Math.abs(velRef.current.vx) < posThreshold) {
+      const dist = Math.sqrt(posRef.current.x ** 2 + posRef.current.y ** 2);
+      const velMag = Math.sqrt(velRef.current.vx ** 2 + velRef.current.vy ** 2);
+
+      // Sound logic during return
+      if (dist > 1 && !isHomingRef.current) {
+        isHomingRef.current = true;
+      }
+      
+      if (isHomingRef.current) {
+        audio.setDriftIntensity(Math.min(velMag * 2, 1));
+      }
+
+      const posThreshold = 0.005;
+      if (dist < posThreshold && velMag < posThreshold) {
+        if (isHomingRef.current) {
+          audio.playSfx('settle'); // Trigger settle sound on docking
+          audio.setDriftIntensity(0);
+          isHomingRef.current = false;
+        }
         posRef.current.x = 0;
         posRef.current.y = 0;
         velRef.current.vx = 0;
         velRef.current.vy = 0;
       }
+    } else {
+      isHomingRef.current = false;
+      audio.setDriftIntensity(0);
     }
 
     // 2. Scale Spring (Graceful return to scale 1)
     if (!state.isCharging && !state.isCrazy && !state.isPressed) {
-      const scaleSpring = 0.008; // Slower return
+      const scaleSpring = 0.008; 
       const scaleDamping = 0.92;
       
       scaleVelRef.current += (1 - scaleRef.current) * scaleSpring;
@@ -522,12 +587,10 @@ export default function App() {
         audio.playSfx('burst');
       }}
     >
-      {/* Supernova Reset Effect */}
       {state.crazyStage === 'supernova' && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-white animate-supernova pointer-events-none" />
       )}
 
-      {/* Background Journey Layers */}
       <div className={`absolute inset-0 transition-all duration-[3000ms] pointer-events-none ${state.isCrazy ? 'opacity-100' : 'opacity-0'}`}>
         {state.crazyStage === 'stargate' && (
           <div className="absolute inset-0 flex items-center justify-center stargate-tunnel">
@@ -571,11 +634,6 @@ export default function App() {
         )}
       </div>
 
-      {/* 
-          CRITICAL CENTERING: 
-          'absolute inset-0 flex items-center justify-center' ensures the inner container 
-          is exactly at the center (width and height) of the viewport.
-      */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div 
           className={`pointer-events-auto transition-[opacity] duration-[1500ms] ease-out ${state.crazyStage === 'stargate' ? 'scale-0 blur-xl opacity-0' : 'opacity-100'}`}
