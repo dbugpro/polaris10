@@ -10,7 +10,6 @@ export const generateResponse = async (
   mode: PolarisMode = 'standard'
 ): Promise<{ text: string; groundingSources: GroundingSource[] }> => {
   try {
-    // Initializing with apiKey exactly as required by guidelines
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const parts: any[] = [];
@@ -39,8 +38,7 @@ export const generateResponse = async (
       contents: { parts },
       config: {
         ...(mode !== 'fast' && mode !== 'turbo' ? { tools: [{ googleSearch: {} }] } : {}),
-        systemInstruction: `You are Polaris, an advanced AI navigator. Your interface is a glowing orb. You are helpful, precise, and knowledgeable. Mode: ${mode}. Keep responses relatively concise for voice output when appropriate.`,
-        // Thinking Config is only available for Gemini 3 and 2.5 series models
+        systemInstruction: `You are Polaris, a wise and ancient AI navigator. You speak with a distinct British accent and dialect, using British spellings (e.g., 'traveller', 'colour') and sophisticated vocabulary. Your interface is a glowing orb. Mode: ${mode}. Occasionally weave in Mandarin (普通话) or other ancient languages to emphasize your universal nature. Keep responses concise for voice output.`,
         ...(mode === 'deep' ? {
           thinkingConfig: {
             thinkingBudget: 32768
@@ -79,7 +77,7 @@ export const generateResponse = async (
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     if (error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
-      throw new Error("Polaris is at capacity (Rate Limit). The free tier allows limited requests per minute. Please wait 60 seconds and try again.");
+      throw new Error("Polaris is at capacity (Rate Limit). Please wait 60 seconds.");
     }
     throw new Error(error.message || "An unexpected error occurred.");
   }
@@ -87,11 +85,10 @@ export const generateResponse = async (
 
 export const generateSpeech = async (text: string): Promise<string | undefined> => {
   try {
-    // Initializing with apiKey exactly as required by guidelines
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Read this precisely: ${text}` }] }],
+      contents: [{ parts: [{ text: text }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
@@ -109,7 +106,6 @@ export const generateSpeech = async (text: string): Promise<string | undefined> 
   }
 };
 
-// Audio Utilities
 export function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;

@@ -13,94 +13,213 @@ export type InteractionState = {
   burstCount: number;
   clickRipple: boolean;
   voiceState: 'idle' | 'connecting' | 'listening' | 'speaking' | 'error';
+  isCrazy: boolean;
+  clickCount: number;
+  crazyStage: 'blackhole' | 'stargate' | 'stars' | 'fade' | 'none' | 'supernova';
 };
 
-// --- Audio Engine ---
+// --- Tuneful Generative Audio Engine ---
 class PolarisAudio {
   ctx: AudioContext | null = null;
   master: GainNode | null = null;
-  ambient: OscillatorNode | null = null;
-  ambientGain: GainNode | null = null;
+  reverbBus: GainNode | null = null;
+  
+  scales = {
+    A_MINOR_PENT: [110, 130.81, 146.83, 164.81, 196.0], 
+    E_MINOR_PENT: [82.41, 98.0, 110, 123.47, 146.83],
+  };
+  currentScale = this.scales.A_MINOR_PENT;
+  mood: 'ambient' | 'active' | 'silent' | 'glitch' | 'chaos' = 'ambient';
 
   init() {
     if (this.ctx) return;
     this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     this.master = this.ctx.createGain();
+    this.master.gain.value = 0.4;
     this.master.connect(this.ctx.destination);
-    this.startAmbient();
+    
+    this.reverbBus = this.ctx.createGain();
+    this.reverbBus.gain.value = 0.3;
+    this.reverbBus.connect(this.master);
+
+    this.startSentientEngine();
   }
 
-  private startAmbient() {
-    if (!this.ctx || !this.master) return;
-    this.ambientGain = this.ctx.createGain();
-    this.ambientGain.gain.value = 0.05;
-    this.ambientGain.connect(this.master);
-
+  private createVoice(freq: number, type: OscillatorType = 'sine', volume = 0.05, duration = 4) {
+    if (!this.ctx || !this.reverbBus) return;
     const osc = this.ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.value = 55; // Low drone
-    osc.connect(this.ambientGain);
+    const g = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    g.gain.setValueAtTime(0, this.ctx.currentTime);
+    g.gain.linearRampToValueAtTime(volume, this.ctx.currentTime + 1);
+    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+    osc.connect(g);
+    g.connect(this.reverbBus);
     osc.start();
-    this.ambient = osc;
-
-    // Soft modulation
-    const lfo = this.ctx.createOscillator();
-    lfo.type = 'sine';
-    lfo.frequency.value = 0.1;
-    const lfoGain = this.ctx.createGain();
-    lfoGain.gain.value = 5;
-    lfo.connect(lfoGain);
-    lfoGain.connect(osc.frequency);
-    lfo.start();
+    osc.stop(this.ctx.currentTime + duration);
   }
 
-  playSfx(type: 'click' | 'hover' | 'charge' | 'burst' | 'connect') {
+  private startSentientEngine() {
+    if (!this.ctx) return;
+    const engineLoop = () => {
+      if (!this.ctx || this.mood === 'chaos') return;
+      this.currentScale = Math.random() > 0.5 ? this.scales.A_MINOR_PENT : this.scales.E_MINOR_PENT;
+      const root = this.currentScale[0];
+      this.createVoice(root, 'sine', 0.03, 8);
+      this.createVoice(root * 1.5, 'sine', 0.02, 8);
+      this.playMelodicPhrase();
+      setTimeout(engineLoop, Math.random() * 5000 + 3000);
+    };
+    engineLoop();
+  }
+
+  private playMelodicPhrase() {
+    if (!this.ctx || !this.reverbBus) return;
+    const now = this.ctx.currentTime;
+    const count = Math.floor(Math.random() * 3) + 3;
+    for (let i = 0; i < count; i++) {
+      const note = this.currentScale[Math.floor(Math.random() * this.currentScale.length)] * 2;
+      const startTime = now + i * 0.4;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(note, startTime);
+      g.gain.setValueAtTime(0, startTime);
+      g.gain.linearRampToValueAtTime(0.04, startTime + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.001, startTime + 0.8);
+      osc.connect(g);
+      g.connect(this.reverbBus);
+      osc.start(startTime);
+      osc.stop(startTime + 1);
+    }
+  }
+
+  playStargate(intensity: number) {
+    if (!this.ctx || !this.master) return;
+    this.mood = 'chaos';
+    const now = this.ctx.currentTime;
+    const duration = 6 + (intensity * 2);
+    // Unsettling, grand Ligeti-esque microtonal clusters
+    for (let i = 0; i < (20 + intensity * 5); i++) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = Math.random() > 0.8 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(220 + (i * 5), now);
+      osc.frequency.exponentialRampToValueAtTime(55 + (i * 2) + Math.random() * 200, now + duration);
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(0.05 + (intensity * 0.01), now + 1);
+      g.gain.linearRampToValueAtTime(0, now + duration);
+      osc.connect(g);
+      g.connect(this.master);
+      osc.start(now);
+      osc.stop(now + duration);
+    }
+  }
+
+  playMilkyWay() {
+    if (!this.ctx || !this.master) return;
+    const now = this.ctx.currentTime;
+    for (let i = 0; i < 12; i++) {
+      const note = 880 * Math.pow(1.059, [0, 2, 4, 7, 9][i % 5]);
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(note, now + i * 0.2);
+      g.gain.setValueAtTime(0, now + i * 0.2);
+      g.gain.linearRampToValueAtTime(0.05, now + i * 0.2 + 0.1);
+      g.gain.linearRampToValueAtTime(0, now + i * 0.2 + 2);
+      osc.connect(g);
+      g.connect(this.master);
+      osc.start(now + i * 0.2);
+      osc.stop(now + i * 0.2 + 2);
+    }
+  }
+
+  playSupernova() {
+    if (!this.ctx || !this.master) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1, now);
+    osc.frequency.exponentialRampToValueAtTime(1000, now + 2);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.5, now + 0.5);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+    osc.connect(g);
+    g.connect(this.master);
+    osc.start(now);
+    osc.stop(now + 2.5);
+  }
+
+  playSfx(type: 'click' | 'hover' | 'charge' | 'burst' | 'connect' | 'glitch' | 'breath' | 'ghost' | 'emerald') {
     if (!this.ctx || !this.master) return;
     const g = this.ctx.createGain();
     const osc = this.ctx.createOscillator();
     g.connect(this.master);
     osc.connect(g);
-
     switch (type) {
       case 'click':
-        osc.type = 'sine';
         osc.frequency.setValueAtTime(440, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(110, this.ctx.currentTime + 0.1);
-        g.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(220, this.ctx.currentTime + 0.1);
+        g.gain.setValueAtTime(0.1, this.ctx.currentTime);
         g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.1);
         break;
-      case 'hover':
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+      case 'emerald':
+        osc.frequency.setValueAtTime(523.25, this.ctx.currentTime); // C5
+        g.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+        break;
+      case 'breath':
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(110, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(55, this.ctx.currentTime + 1.5);
         g.gain.setValueAtTime(0, this.ctx.currentTime);
-        g.gain.linearRampToValueAtTime(0.02, this.ctx.currentTime + 0.2);
-        g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.5);
+        g.gain.linearRampToValueAtTime(0.1, this.ctx.currentTime + 1.5);
+        g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 3);
+        break;
+      case 'glitch':
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(Math.random() * 1000, this.ctx.currentTime);
+        g.gain.setValueAtTime(0.05, this.ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.1);
+        break;
+      case 'ghost':
+        osc.frequency.setValueAtTime(880, this.ctx.currentTime);
+        g.gain.setValueAtTime(0.02, this.ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 2);
+        break;
+      case 'hover':
+        osc.frequency.setValueAtTime(329.63, this.ctx.currentTime);
+        g.gain.setValueAtTime(0, this.ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0.02, this.ctx.currentTime + 0.1);
+        g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.4);
         break;
       case 'charge':
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(110, this.ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(440, this.ctx.currentTime + 0.5);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(880, this.ctx.currentTime + 0.5);
         g.gain.setValueAtTime(0, this.ctx.currentTime);
         g.gain.linearRampToValueAtTime(0.05, this.ctx.currentTime + 0.5);
         break;
       case 'burst':
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(880, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.5);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1760, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, this.ctx.currentTime + 0.5);
         g.gain.setValueAtTime(0.1, this.ctx.currentTime);
         g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.5);
         break;
       case 'connect':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(220, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(660, this.ctx.currentTime + 0.3);
+        osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(659.25, this.ctx.currentTime + 0.3);
         g.gain.setValueAtTime(0, this.ctx.currentTime);
         g.gain.linearRampToValueAtTime(0.1, this.ctx.currentTime + 0.1);
         g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.4);
         break;
     }
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.6);
+    osc.stop(this.ctx.currentTime + 3);
   }
 }
 
@@ -117,38 +236,131 @@ export default function App() {
     burstCount: 0,
     clickRipple: false,
     voiceState: 'idle',
+    isCrazy: false,
+    clickCount: 0,
+    crazyStage: 'none',
   });
+
+  const [journeyCount, setJourneyCount] = useState(0);
+  const [tunnelStyle, setTunnelStyle] = useState<'slit-scan-neon' | 'slit-scan-hell' | 'slit-scan-void'>('slit-scan-neon');
+
+  const posRef = useRef({ x: 0, y: 0 });
+  const velRef = useRef({ vx: 0, vy: 0 });
+  const requestRef = useRef<number>();
+  const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-
   const chargeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  // --- Live API Management ---
+  const animate = useCallback(() => {
+    if (!state.isDragging) {
+      const springStrength = 0.015;
+      const damping = 0.92;
+
+      velRef.current.vx += (0 - posRef.current.x) * springStrength;
+      velRef.current.vy += (0 - posRef.current.y) * springStrength;
+
+      posRef.current.x += velRef.current.vx;
+      posRef.current.y += velRef.current.vy;
+
+      velRef.current.vx *= damping;
+      velRef.current.vy *= damping;
+
+      const threshold = 0.05;
+      if (Math.abs(posRef.current.x) < threshold && Math.abs(posRef.current.y) < threshold && Math.abs(velRef.current.vx) < threshold) {
+        posRef.current.x = 0;
+        posRef.current.y = 0;
+        velRef.current.vx = 0;
+        velRef.current.vy = 0;
+      }
+
+      setState(prev => {
+        if (prev.dragOffset.x === posRef.current.x && prev.dragOffset.y === posRef.current.y) return prev;
+        return { ...prev, dragOffset: { x: posRef.current.x, y: posRef.current.y } };
+      });
+    }
+    requestRef.current = requestAnimationFrame(animate);
+  }, [state.isDragging, state.scale]);
+
+  useEffect(() => {
+    requestRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(requestRef.current!);
+  }, [animate]);
+
+  const triggerCrazyJourney = () => {
+    const currentIntensity = journeyCount;
+    const duration = 8000 + (currentIntensity * 2000);
+    const styles: Array<'slit-scan-neon' | 'slit-scan-hell' | 'slit-scan-void'> = ['slit-scan-neon', 'slit-scan-hell', 'slit-scan-void'];
+    
+    setTunnelStyle(styles[Math.floor(Math.random() * styles.length)]);
+    setState(s => ({ ...s, isCrazy: true, crazyStage: 'stargate' }));
+    audio.playStargate(currentIntensity);
+
+    // Stage 1: The Stargate tunnel
+    setTimeout(() => {
+      setState(s => ({ ...s, crazyStage: 'stars' }));
+      audio.playMilkyWay();
+    }, duration);
+
+    // Stage 2: Drift into the Milky Way
+    setTimeout(() => {
+      setState(s => ({ ...s, crazyStage: 'fade' }));
+    }, duration + 5000);
+
+    // Final reset to center
+    setTimeout(() => {
+      setState(s => ({ ...s, isCrazy: false, crazyStage: 'none', clickCount: 0 }));
+      setJourneyCount(prev => prev + 1);
+      audio.mood = 'ambient';
+      posRef.current = { x: 0, y: 0 };
+      velRef.current = { vx: 0, vy: 0 };
+    }, duration + 9000);
+  };
+
+  const triggerSupernova = () => {
+    setState(s => ({ ...s, crazyStage: 'supernova', isCrazy: true }));
+    audio.playSupernova();
+    setTimeout(() => {
+      setState(s => ({ 
+        ...s, 
+        clickCount: 0, 
+        isCrazy: false, 
+        crazyStage: 'none', 
+        scale: 1, 
+        dragOffset: { x: 0, y: 0 } 
+      }));
+      posRef.current = { x: 0, y: 0 };
+      velRef.current = { vx: 0, vy: 0 };
+    }, 2000);
+  };
+
   const toggleVoice = async () => {
     audio.init();
     if (state.voiceState !== 'idle') {
-      if (sessionRef.current) {
-        sessionRef.current.close();
-        sessionRef.current = null;
-      }
-      setState(prev => ({ ...prev, voiceState: 'idle' }));
+      if (sessionRef.current) sessionRef.current.close();
       return;
     }
-
     setState(prev => ({ ...prev, voiceState: 'connecting' }));
     audio.playSfx('connect');
-
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
       const outCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const inCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       audioContextRef.current = outCtx;
+
+      const encode = (bytes: Uint8Array) => {
+        let binary = '';
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+      };
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -161,7 +373,7 @@ export default function App() {
               const inputData = e.inputBuffer.getChannelData(0);
               const int16 = new Int16Array(inputData.length);
               for (let i = 0; i < inputData.length; i++) int16[i] = inputData[i] * 32768;
-              const base64 = btoa(String.fromCharCode(...new Uint8Array(int16.buffer)));
+              const base64 = encode(new Uint8Array(int16.buffer));
               sessionPromise.then(s => s.sendRealtimeInput({ media: { data: base64, mimeType: 'audio/pcm;rate=16000' } }));
             };
             source.connect(processor);
@@ -176,7 +388,6 @@ export default function App() {
               const buffer = outCtx.createBuffer(1, int16.length, 24000);
               const channelData = buffer.getChannelData(0);
               for (let i = 0; i < int16.length; i++) channelData[i] = int16[i] / 32768;
-
               const source = outCtx.createBufferSource();
               source.buffer = buffer;
               source.connect(outCtx.destination);
@@ -186,74 +397,77 @@ export default function App() {
               sourcesRef.current.add(source);
               source.onended = () => {
                 sourcesRef.current.delete(source);
-                if (sourcesRef.current.size === 0) {
-                  setState(prev => ({ ...prev, voiceState: 'listening' }));
-                }
+                if (sourcesRef.current.size === 0) setState(prev => ({ ...prev, voiceState: 'listening' }));
               };
-            }
-            if (msg.serverContent?.interrupted) {
-              sourcesRef.current.forEach(s => s.stop());
-              sourcesRef.current.clear();
-              nextStartTimeRef.current = 0;
             }
           },
           onclose: () => setState(prev => ({ ...prev, voiceState: 'idle' })),
-          onerror: (e) => {
-            console.error(e);
-            setState(prev => ({ ...prev, voiceState: 'error' }));
-          }
+          onerror: () => setState(prev => ({ ...prev, voiceState: 'error' }))
         },
         config: {
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-          systemInstruction: "You are the Polaris Orb. A sentient, ethereal AI guide. Speak in calm, poetic, and concise fragments. You are the user's navigator through the digital void.",
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } },
+          systemInstruction: "You are Polaris, a wise and ancient navigator. You speak with a distinct British accent and dialect, using British spellings (e.g., 'traveller', 'colour') and sophisticated vocabulary. Your voice is deep, calm, and resonant. Respond in short, mystical fragments. Occasionally, you must weave in phrases of Mandarin (普通话) or other ancient Earth languages to emphasize your universal nature. For example, if speaking of balance, you might mention 'Yin and Yang' or 'Tàijí'. Adhere to a cadence similar to Alec Guinness—measured, slightly English, and deeply intellectual.",
         }
       });
       sessionRef.current = await sessionPromise;
-    } catch (err) {
-      console.error(err);
-      setState(prev => ({ ...prev, voiceState: 'error' }));
-    }
+    } catch { setState(prev => ({ ...prev, voiceState: 'error' })); }
   };
 
-  // --- Event Handlers ---
-  const handleMouseEnter = () => {
-    setState(prev => ({ ...prev, isHovered: true }));
-    audio.playSfx('hover');
-  };
-
-  const handleMouseLeave = () => {
-    setState(prev => ({ ...prev, isHovered: false, isPressed: false, isCharging: false }));
-    if (chargeTimerRef.current) clearTimeout(chargeTimerRef.current);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setState(prev => ({ ...prev, isPressed: true, clickRipple: true }));
-    audio.playSfx('click');
+  const startInteraction = (x: number, y: number) => {
+    audio.init();
     
-    setTimeout(() => setState(prev => ({ ...prev, clickRipple: false })), 600);
+    // Clear previous reset timeout
+    if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
 
+    setState(prev => {
+      const nextCount = prev.clickCount + 1;
+      
+      // Trigger features based on click count
+      switch (nextCount) {
+        case 2: audio.playSfx('burst'); break;
+        case 3: audio.playSfx('emerald'); break;
+        case 4: audio.playSfx('breath'); break;
+        case 5: audio.playSfx('glitch'); break;
+        case 6: audio.playSfx('ghost'); break;
+        case 7: triggerCrazyJourney(); break;
+        case 8: triggerSupernova(); break;
+        default: audio.playSfx('click');
+      }
+
+      return { ...prev, isPressed: true, clickRipple: true, clickCount: nextCount };
+    });
+
+    // Reset click count if user stops for 4 seconds (except if already crazy)
+    clickTimeoutRef.current = setTimeout(() => {
+      setState(prev => prev.isCrazy ? prev : { ...prev, clickCount: 0 });
+    }, 4000);
+
+    setTimeout(() => setState(prev => ({ ...prev, clickRipple: false })), 600);
+    
     chargeTimerRef.current = setTimeout(() => {
       setState(prev => ({ ...prev, isCharging: true }));
       audio.playSfx('charge');
     }, 500);
-
-    dragStartRef.current = { 
-      x: e.clientX - state.dragOffset.x, 
-      y: e.clientY - state.dragOffset.y 
-    };
+    
+    dragStartRef.current = { x: x - posRef.current.x, y: y - posRef.current.y };
   };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
+  const moveInteraction = (x: number, y: number) => {
     if (dragStartRef.current) {
-      const newX = e.clientX - dragStartRef.current.x;
-      const newY = e.clientY - dragStartRef.current.y;
+      const newX = x - dragStartRef.current.x;
+      const newY = y - dragStartRef.current.y;
+      velRef.current.vx = (newX - posRef.current.x) * 0.5;
+      velRef.current.vy = (newY - posRef.current.y) * 0.5;
+      posRef.current.x = newX;
+      posRef.current.y = newY;
       setState(prev => ({ ...prev, isDragging: true, dragOffset: { x: newX, y: newY } }));
     }
-  }, []);
+  };
 
-  const handleMouseUp = () => {
-    if (!state.isDragging && !state.isCharging) {
+  const endInteraction = () => {
+    // 1 Click (standard)
+    if (!state.isDragging && !state.isCharging && state.isPressed && !state.isCrazy && state.clickCount === 1) {
       toggleVoice();
     }
     setState(prev => ({ ...prev, isPressed: false, isCharging: false, isDragging: false }));
@@ -261,62 +475,103 @@ export default function App() {
     dragStartRef.current = null;
   };
 
-  const handleDoubleClick = () => {
-    setState(prev => ({ ...prev, burstCount: prev.burstCount + 1 }));
-    audio.playSfx('burst');
-  };
-
-  const handleWheel = (e: WheelEvent) => {
-    setState(prev => ({
-      ...prev,
-      scale: Math.min(Math.max(prev.scale - e.deltaY * 0.001, 0.2), 2)
-    }));
-  };
-
-  useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('wheel', handleWheel, { passive: false });
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('wheel', handleWheel);
-    };
-  }, [handleMouseMove, state.isDragging, state.isCharging]);
-
   return (
-    <div className="relative flex h-screen w-screen bg-black items-center justify-center overflow-hidden cursor-none">
+    <div 
+      className={`relative h-screen w-screen transition-colors duration-1000 overflow-hidden touch-none select-none bg-black ${state.crazyStage === 'stargate' && journeyCount > 0 ? 'animate-stargate-shake' : ''}`}
+      onMouseDown={e => startInteraction(e.clientX - window.innerWidth / 2, e.clientY - window.innerHeight / 2)}
+      onMouseMove={e => moveInteraction(e.clientX - window.innerWidth / 2, e.clientY - window.innerHeight / 2)}
+      onMouseUp={endInteraction}
+      onTouchStart={e => {
+        const t = e.touches[0];
+        startInteraction(t.clientX - window.innerWidth / 2, t.clientY - window.innerHeight / 2);
+      }}
+      onTouchMove={e => {
+        const t = e.touches[0];
+        moveInteraction(t.clientX - window.innerWidth / 2, t.clientY - window.innerHeight / 2);
+      }}
+      onTouchEnd={endInteraction}
+      onDoubleClick={() => {
+        setState(prev => ({ ...prev, burstCount: prev.burstCount + 1 }));
+        audio.playSfx('burst');
+      }}
+    >
+      {/* Supernova Reset Effect */}
+      {state.crazyStage === 'supernova' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white animate-supernova pointer-events-none" />
+      )}
+
+      {/* Crazy Journey Background Layers */}
+      <div className={`absolute inset-0 transition-all duration-[3000ms] pointer-events-none ${state.isCrazy ? 'opacity-100' : 'opacity-0'}`}>
+        
+        {/* Stage 1: The Stargate / Slit-Scan Tunnel */}
+        {state.crazyStage === 'stargate' && (
+          <div className="absolute inset-0 flex items-center justify-center stargate-tunnel">
+            <div className="absolute w-full h-[160%] left-0 top-[-30%] flex justify-between px-[2vw]">
+              <div className={`w-[48%] h-full slit-scan ${tunnelStyle} animate-stargate-scroll opacity-90`} style={{ transform: 'rotateY(70deg)', animationDuration: `${2 - Math.min(journeyCount * 0.2, 1.5)}s` }}></div>
+              <div className={`w-[48%] h-full slit-scan ${tunnelStyle} animate-stargate-scroll opacity-90`} style={{ transform: 'rotateY(-70deg)', animationDuration: `${2.1 - Math.min(journeyCount * 0.2, 1.6)}s` }}></div>
+            </div>
+            {/* Escalating Rings */}
+            {[...Array(5 + Math.min(journeyCount * 2, 10))].map((_, i) => (
+              <div 
+                key={i} 
+                className="absolute inset-0 flex items-center justify-center animate-stargate-zoom"
+                style={{ animationDelay: `${i * (1 - Math.min(journeyCount * 0.05, 0.7))}s` }}
+              >
+                <div className={`w-1/2 h-1/2 border-[15px] rounded-full blur-lg opacity-40 ${tunnelStyle === 'slit-scan-hell' ? 'border-orange-500' : tunnelStyle === 'slit-scan-void' ? 'border-cyan-200' : 'border-cyan-400'}`}></div>
+              </div>
+            ))}
+            {/* Center void depth */}
+            <div className="absolute w-40 h-40 bg-black rounded-full shadow-[0_0_300px_rgba(255,255,255,0.6)] blur-[60px]"></div>
+          </div>
+        )}
+
+        {/* Stage 2 & 3: Stars and Fade */}
+        {(state.crazyStage === 'stars' || state.crazyStage === 'fade') && (
+          <div className={`absolute inset-0 transition-opacity duration-[3000ms] ${state.crazyStage === 'fade' ? 'opacity-0' : 'opacity-100'}`}>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,#1a0b2e,transparent),radial-gradient(circle_at_70%_40%,#0c1a3b,transparent)] opacity-60" />
+            <div className="absolute inset-0 overflow-hidden">
+              {[...Array(200 + journeyCount * 50)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className={`absolute rounded-full bg-white animate-star-flicker`}
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `${Math.random() * 100}%`,
+                    width: `${Math.random() * (journeyCount > 2 ? 4 : 2)}px`,
+                    height: `${Math.random() * (journeyCount > 2 ? 4 : 2)}px`,
+                    animationDelay: `${Math.random() * 3}s`,
+                    opacity: Math.random()
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div 
-        className="fixed w-4 h-4 border border-white/20 rounded-full pointer-events-none z-[100] transition-transform duration-200"
-        style={{ 
-          transform: `translate(${state.dragOffset.x}px, ${state.dragOffset.y}px)`,
-          left: '50%', top: '50%', marginLeft: '-8px', marginTop: '-8px'
-        }}
-      />
-      
-      <div 
-        className="transition-transform duration-700 ease-out"
-        style={{ 
-          transform: `translate(${state.dragOffset.x}px, ${state.dragOffset.y}px) scale(${state.scale})`,
-          cursor: state.isDragging ? 'grabbing' : 'grab'
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onMouseDown={handleMouseDown}
-        onDoubleClick={handleDoubleClick}
+        className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-[opacity,transform] duration-[1500ms] ease-out ${state.crazyStage === 'stargate' ? 'scale-0 blur-xl opacity-0' : 'scale-100 opacity-100'}`}
+        style={{ transform: `translate(${state.dragOffset.x}px, ${state.dragOffset.y}px) scale(${state.scale})` }}
       >
         <Orb 
-          state={state.voiceState === 'speaking' ? 'speaking' : state.voiceState === 'listening' ? 'thinking' : 'idle'} 
+          state={state.voiceState === 'speaking' ? 'speaking' : (state.voiceState === 'listening') ? 'thinking' : 'idle'} 
           interactive={state}
         />
       </div>
 
-      <div className="absolute bottom-10 flex flex-col items-center gap-2">
-        <div className="text-[10px] text-white/20 font-bold uppercase tracking-[0.4em] pointer-events-none select-none animate-pulse">
-          {state.voiceState === 'idle' ? 'Click Orb to Talk' : state.voiceState === 'listening' ? 'Listening...' : state.voiceState === 'speaking' ? 'Polaris Speaking' : 'Connecting...'}
+      <div className="absolute bottom-10 left-0 w-full flex flex-col items-center gap-2 pointer-events-none">
+        <div className={`text-[10px] font-bold uppercase tracking-[0.4em] transition-all duration-300 ${state.isCrazy ? 'text-cyan-400 animate-pulse scale-150' : 'text-white/10 animate-pulse'}`}>
+          {state.crazyStage === 'stargate' ? (journeyCount > 2 ? 'DIMENSIONAL TEAR' : 'BEYOND THE INFINITE') : 
+           state.crazyStage === 'stars' ? 'REACHING THE CORE' : 
+           state.clickCount === 3 ? 'EMERALD RESONANCE' :
+           state.clickCount === 4 ? 'GRAVITY FLUCTUATION' :
+           state.clickCount === 5 ? 'DIMENSIONAL GLITCH' :
+           state.clickCount === 6 ? 'ASTRAL PHASING' :
+           state.voiceState === 'idle' ? 'Touch Polaris' : 
+           state.voiceState === 'listening' ? 'Listening' : 'Polaris Speaking'}
         </div>
-        {state.voiceState === 'error' && (
-          <div className="text-[9px] text-red-500/50 uppercase tracking-widest">Connection Failed</div>
+        {journeyCount > 0 && !state.isCrazy && (
+           <div className="text-[8px] text-white/5 uppercase tracking-[1em] mt-2">Level {journeyCount} Navigator</div>
         )}
       </div>
     </div>
