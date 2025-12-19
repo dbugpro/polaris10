@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
 import { GroundingSource } from "../types";
 
@@ -9,13 +10,8 @@ export const generateResponse = async (
   mode: PolarisMode = 'standard'
 ): Promise<{ text: string; groundingSources: GroundingSource[] }> => {
   try {
-    const apiKey = process.env.API_KEY;
-    
-    if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
-      throw new Error("API Key is missing. Please check your environment variables or connect a key.");
-    }
-    
-    const ai = new GoogleGenAI({ apiKey });
+    // Initializing with apiKey exactly as required by guidelines
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const parts: any[] = [];
 
@@ -44,6 +40,7 @@ export const generateResponse = async (
       config: {
         ...(mode !== 'fast' && mode !== 'turbo' ? { tools: [{ googleSearch: {} }] } : {}),
         systemInstruction: `You are Polaris, an advanced AI navigator. Your interface is a glowing orb. You are helpful, precise, and knowledgeable. Mode: ${mode}. Keep responses relatively concise for voice output when appropriate.`,
+        // Thinking Config is only available for Gemini 3 and 2.5 series models
         ...(mode === 'deep' ? {
           thinkingConfig: {
             thinkingBudget: 32768
@@ -90,10 +87,8 @@ export const generateResponse = async (
 
 export const generateSpeech = async (text: string): Promise<string | undefined> => {
   try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return undefined;
-
-    const ai = new GoogleGenAI({ apiKey });
+    // Initializing with apiKey exactly as required by guidelines
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: `Read this precisely: ${text}` }] }],

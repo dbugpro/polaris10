@@ -1,72 +1,105 @@
-import React from 'react';
+
+import React, { useMemo } from 'react';
+import { InteractionState } from '../App';
 
 interface OrbProps {
   state: 'idle' | 'thinking' | 'speaking';
   size?: 'small' | 'large';
-  isDeepThink?: boolean;
-  isFast?: boolean;
-  isTurbo?: boolean;
+  interactive?: InteractionState;
 }
 
-export const Orb: React.FC<OrbProps> = ({ state, size = 'large', isDeepThink = false, isFast = false, isTurbo = false }) => {
-  const containerClasses = size === 'large' 
-    ? "w-40 h-40 sm:w-64 sm:h-64 md:w-80 md:h-80" 
-    : "w-10 h-10 md:w-12 md:h-12";
+export const Orb: React.FC<OrbProps> = ({ state, interactive }) => {
+  const isHovered = interactive?.isHovered || false;
+  const isPressed = interactive?.isPressed || false;
+  const isCharging = interactive?.isCharging || false;
+  const isDragging = interactive?.isDragging || false;
+  const burstCount = interactive?.burstCount || 0;
+  const hasRipple = interactive?.clickRipple || false;
+  const voiceState = interactive?.voiceState || 'idle';
 
-  const glowColor = isDeepThink
-    ? 'shadow-[0_0_70px_rgba(168,85,247,0.7)]' // Vivid Purple
-    : isTurbo
-    ? 'shadow-[0_0_70px_rgba(244,63,94,0.7)]' // Rose
-    : isFast
-    ? 'shadow-[0_0_70px_rgba(245,158,11,0.7)]' // Amber
-    : state === 'thinking' 
-      ? 'shadow-[0_0_60px_rgba(56,189,248,0.6)]' 
-      : state === 'speaking'
-      ? 'shadow-[0_0_80px_rgba(56,189,248,0.8)]'
-      : 'shadow-[0_0_50px_rgba(56,189,248,0.5)]';
+  // Derive dynamic intensities
+  const glowOpacity = isCharging ? 'opacity-40' : (isHovered || voiceState !== 'idle') ? 'opacity-30' : 'opacity-10';
+  const rotationSpeed = isCharging ? '[animation-duration:2s]' : isHovered ? '[animation-duration:8s]' : '[animation-duration:12s]';
+  const coreScale = isCharging ? 'scale-150' : isPressed ? 'scale-90' : 'scale-100';
 
-  const gradientClass = isDeepThink
-    ? 'from-purple-600 via-indigo-700 to-blue-500'
-    : isTurbo
-    ? 'from-rose-500 via-fuchsia-600 to-indigo-500'
-    : isFast
-    ? 'from-amber-400 via-orange-500 to-red-500'
-    : 'from-blue-500 via-sky-600 to-cyan-400';
+  // Voice Color Mapping
+  const getBaseColor = () => {
+    if (voiceState === 'speaking') return 'radial-gradient(circle at 35% 35%, #fff 0%, #22d3ee 30%, #0891b2 70%, #083344 100%)';
+    if (voiceState === 'listening') return 'radial-gradient(circle at 35% 35%, #a5f3fc 0%, #06b6d4 40%, #155e75 80%, #083344 100%)';
+    if (isCharging) return 'radial-gradient(circle at 35% 35%, #fff 0%, #38bdf8 20%, #0284c7 50%, #0c4a6e 100%)';
+    return 'radial-gradient(circle at 35% 35%, #38bdf8 0%, #0ea5e9 25%, #0284c7 50%, #0369a1 75%, #0c4a6e 100%)';
+  };
+
+  const burstAnimation = useMemo(() => {
+    if (burstCount === 0) return '';
+    return 'animate-[ping_0.8s_ease-out_1]';
+  }, [burstCount]);
 
   return (
-    <div className={`relative flex items-center justify-center ${containerClasses} transition-all duration-700`}>
-      <div className={`absolute inset-0 rounded-full blur-3xl opacity-20 ${isDeepThink ? 'bg-purple-500' : isTurbo ? 'bg-rose-500' : isFast ? 'bg-amber-500' : 'bg-blue-500'} ${state !== 'idle' ? 'animate-pulse' : ''}`}></div>
+    <div className={`relative flex items-center justify-center w-64 h-64 sm:w-80 sm:h-80 md:w-[32rem] md:h-[32rem] transition-all duration-700 ${isDragging ? 'animate-none' : 'animate-float'}`}>
       
-      {state === 'speaking' && (
-        <>
-          <div className="absolute inset-0 rounded-full border-2 border-cyan-400/30 animate-[ping_2s_linear_infinite]"></div>
-          <div className="absolute inset-4 rounded-full border-2 border-cyan-400/20 animate-[ping_3s_linear_infinite]"></div>
-        </>
+      {/* 1. Outer Ethereal Nebula Glow */}
+      <div className={`
+        absolute inset-0 rounded-full blur-[120px] transition-all duration-1000
+        ${glowOpacity}
+        ${voiceState === 'speaking' ? 'bg-cyan-400' : 'bg-blue-600'}
+        ${isCharging || voiceState !== 'idle' ? 'animate-pulse' : 'animate-[pulse_12s_ease-in-out_infinite]'}
+      `}></div>
+      
+      {/* 2. Secondary Pulse layer */}
+      <div className={`
+        absolute inset-10 rounded-full blur-[80px] transition-all duration-500
+        ${voiceState === 'speaking' ? 'bg-cyan-300 opacity-40' : 'bg-sky-700'}
+        ${isCharging ? 'opacity-40 scale-125' : isHovered ? 'opacity-25' : 'opacity-15'}
+      `}></div>
+      
+      {/* 3. Voice/Interaction Ripples */}
+      {(voiceState !== 'idle' || hasRipple) && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className={`absolute w-full h-full rounded-full border border-cyan-400/30 ${voiceState === 'speaking' ? 'animate-[ping_1s_linear_infinite]' : 'animate-[ping_2s_linear_infinite]'}`}></div>
+          <div className="absolute w-3/4 h-3/4 rounded-full border border-cyan-400/10 animate-[ping_3s_linear_infinite]"></div>
+        </div>
       )}
 
+      {/* 4. Double Click Burst Effect */}
+      {burstCount > 0 && (
+        <div className={`absolute inset-[-20%] rounded-full border-4 border-cyan-400/50 blur-sm ${burstAnimation}`}></div>
+      )}
+
+      {/* 5. The Core Sphere */}
       <div 
         className={`
-          relative w-full h-full rounded-full 
-          bg-gradient-to-br ${gradientClass}
-          ${glowColor}
-          transition-all duration-1000
+          relative w-[75%] h-[75%] rounded-full 
+          transition-all duration-500 ease-out
           flex items-center justify-center
           overflow-hidden
-          ${state === 'speaking' ? 'scale-105' : 'scale-100'}
+          ${coreScale}
+          ${voiceState === 'speaking' ? 'shadow-[0_0_120px_rgba(34,211,238,0.6)]' : ''}
+          ${isCharging ? 'shadow-[0_0_150px_rgba(56,189,248,0.8)]' : isHovered ? 'shadow-[0_0_100px_rgba(14,165,233,0.4)]' : 'shadow-[0_0_60px_rgba(14,165,233,0.2)]'}
+          ${state === 'idle' && !isPressed && voiceState === 'idle' ? 'animate-[pulse_10s_ease-in-out_infinite]' : ''}
         `}
+        style={{ background: getBaseColor() }}
       >
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.4),transparent_50%)]"></div>
-        <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_70%_70%,rgba(0,0,0,0.6),transparent_50%)]"></div>
+        {/* Specular Highlight */}
+        <div className={`
+          absolute top-[22%] left-[22%] w-[18%] h-[18%] bg-white/40 blur-md rounded-full transition-all duration-300
+          ${isHovered ? 'translate-x-1 translate-y-1' : ''}
+        `}></div>
         
-        {(state === 'thinking' || state === 'speaking' || isDeepThink || isFast || isTurbo) && (
-             <div className={`absolute inset-0 w-full h-full animate-spin ${state === 'speaking' ? '[animation-duration:4s]' : isDeepThink ? '[animation-duration:8s]' : isTurbo ? '[animation-duration:2s]' : isFast ? '[animation-duration:1s]' : '[animation-duration:3s]'}`}>
-                <div className={`absolute top-1/2 left-1/2 w-[120%] h-[120%] -translate-x-1/2 -translate-y-1/2 rounded-full border-t-2 border-b-2 ${isDeepThink ? 'border-purple-300/40' : isTurbo ? 'border-rose-200/50' : isFast ? 'border-amber-200/50' : 'border-white/30'} blur-sm`}></div>
-             </div>
-        )}
+        {/* Rim Light */}
+        <div className="absolute inset-0 rounded-full border border-white/10 ring-1 ring-inset ring-white/5"></div>
 
-        {(isDeepThink || isFast || isTurbo || state === 'speaking') && (
-          <div className={`absolute w-1/4 h-1/4 ${isDeepThink ? 'bg-white/30' : isTurbo ? 'bg-rose-100/40' : isFast ? 'bg-amber-100/40' : 'bg-white/40'} blur-xl rounded-full animate-pulse`}></div>
-        )}
+        {/* Dynamic Activity Rings */}
+        <div className={`absolute inset-0 w-full h-full animate-spin-slow ${rotationSpeed}`}>
+          <div className={`absolute top-1/2 left-1/2 w-[110%] h-[110%] -translate-x-1/2 -translate-y-1/2 rounded-full border-t border-b border-white/10 blur-[2px] ${voiceState !== 'idle' ? 'border-cyan-200/20' : ''}`}></div>
+        </div>
+
+        {/* Internal Core Pulsation */}
+        <div className={`
+          absolute w-1/3 h-1/3 bg-white/10 blur-3xl rounded-full transition-all duration-700
+          ${isCharging || voiceState === 'speaking' ? 'bg-white/40 opacity-100 scale-150' : 'opacity-100 scale-100'}
+          ${voiceState !== 'idle' || isCharging ? 'animate-pulse' : 'animate-[pulse_15s_ease-in-out_infinite]'}
+        `}></div>
       </div>
     </div>
   );
