@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, X, Compass, Brain, Zap, Bolt, Activity, Key, CheckCircle2, Info } from 'lucide-react';
+import { Send, Image as ImageIcon, X, Compass, Brain, Zap, Bolt, Activity, Key, CheckCircle2, Info, Volume2, VolumeX } from 'lucide-react';
 import { Message, LoadingState } from './types';
-import { generateResponse, PolarisMode } from './services/geminiService';
+import { generateResponse, generateSpeech, PolarisMode, decodeBase64, decodeAudioData } from './services/geminiService';
 import { MessageItem } from './components/MessageItem';
 import { Orb } from './components/Orb';
 
@@ -11,13 +11,6 @@ const INITIAL_SUGGESTIONS = [
   "What's the quickest way to summarize a 50-page document?",
   "Explain the mathematical proof of the Pythagorean theorem."
 ];
-
-const modeColors: Record<PolarisMode, string> = {
-  standard: 'cyan',
-  fast: 'amber',
-  turbo: 'rose',
-  deep: 'purple'
-};
 
 const bgColors: Record<PolarisMode, string> = {
   standard: 'bg-cyan-500',
@@ -49,9 +42,13 @@ export default function App() {
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [isAiStudioEnv, setIsAiStudioEnv] = useState(false);
   const [showQuotaTip, setShowQuotaTip] = useState(false);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   useEffect(() => {
     const checkKey = async () => {
@@ -64,7 +61,53 @@ export default function App() {
       }
     };
     checkKey();
+    
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
   }, []);
+
+  const stopCurrentSpeech = () => {
+    if (currentAudioSourceRef.current) {
+      currentAudioSourceRef.current.stop();
+      currentAudioSourceRef.current = null;
+    }
+    setIsSpeaking(false);
+  };
+
+  const playSpeech = async (base64Audio: string) => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      }
+      
+      const ctx = audioContextRef.current;
+      if (ctx.state === 'suspended') await ctx.resume();
+
+      stopCurrentSpeech();
+      setIsSpeaking(true);
+
+      const audioBuffer = await decodeAudioData(
+        decodeBase64(base64Audio),
+        ctx,
+        24000,
+        1
+      );
+
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      source.onended = () => setIsSpeaking(false);
+      
+      currentAudioSourceRef.current = source;
+      source.start();
+    } catch (error) {
+      console.error("Playback error:", error);
+      setIsSpeaking(false);
+    }
+  };
 
   const handleConnectKey = async () => {
     if (window.aistudio) {
@@ -75,7 +118,7 @@ export default function App() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loadingState]);
+  }, [messages, loadingState, isSpeaking]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -89,6 +132,8 @@ export default function App() {
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if ((!input.trim() && !selectedImage) || loadingState !== LoadingState.IDLE) return;
+
+    stopCurrentSpeech();
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -109,6 +154,7 @@ export default function App() {
 
     try {
       const response = await generateResponse(currentInput, currentImage || undefined, currentMode);
+      
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'model',
@@ -116,6 +162,13 @@ export default function App() {
         groundingSources: response.groundingSources,
         timestamp: Date.now(),
       }]);
+
+      if (isVoiceEnabled) {
+        const audioData = await generateSpeech(response.text);
+        if (audioData) {
+          await playSpeech(audioData);
+        }
+      }
     } catch (err: any) {
       const isQuotaError = err.message.includes('capacity') || err.message.includes('Limit');
       setMessages(prev => [...prev, {
@@ -142,6 +195,17 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => {
+              setIsVoiceEnabled(!isVoiceEnabled);
+              if (isSpeaking) stopCurrentSpeech();
+            }}
+            className={`p-2 rounded-full border transition-all ${isVoiceEnabled ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400' : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'}`}
+            title={isVoiceEnabled ? "Voice Enabled" : "Voice Disabled"}
+          >
+            {isVoiceEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          </button>
+
            <div className="hidden sm:flex items-center gap-1 bg-black/30 p-1 rounded-full border border-white/10">
             <button onClick={() => setMode('fast')} title="Fast Mode" className={`p-1.5 rounded-full transition-all ${mode === 'fast' ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}><Bolt size={16} /></button>
             <button onClick={() => setMode('standard')} title="Standard Mode" className={`p-1.5 rounded-full transition-all ${mode === 'standard' ? 'bg-cyan-500 text-black' : 'text-slate-400 hover:text-white'}`}><Zap size={16} /></button>
@@ -164,7 +228,7 @@ export default function App() {
       <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center space-y-8 opacity-0 animate-in fade-in duration-1000 fill-mode-forwards">
-            <Orb state="idle" isDeepThink={mode === 'deep'} isFast={mode === 'fast'} isTurbo={mode === 'turbo'} />
+            <Orb state={loadingState === LoadingState.THINKING ? 'thinking' : isSpeaking ? 'speaking' : 'idle'} isDeepThink={mode === 'deep'} isFast={mode === 'fast'} isTurbo={mode === 'turbo'} />
             <div className="text-center space-y-2">
                <h2 className="text-xl md:text-2xl font-light tracking-[0.2em] text-slate-300 uppercase">System Active</h2>
                <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold flex items-center justify-center gap-2">
@@ -194,6 +258,16 @@ export default function App() {
                 <span className="text-xs font-bold uppercase tracking-[0.2em]">Navigating Knowledge...</span>
               </div>
             )}
+            {isSpeaking && (
+              <div className="flex items-center gap-3 px-4 text-cyan-400">
+                <div className="flex gap-1 items-end h-3">
+                  <div className="w-1 bg-current animate-[bounce_1s_infinite_0ms]"></div>
+                  <div className="w-1 bg-current animate-[bounce_1s_infinite_200ms]"></div>
+                  <div className="w-1 bg-current animate-[bounce_1s_infinite_400ms]"></div>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Synthesizing Vocal Protocol...</span>
+              </div>
+            )}
             {showQuotaTip && (
               <div className="mx-auto max-w-lg p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex gap-3 items-start animate-in slide-in-from-top-4 duration-500">
                 <Info className="text-amber-500 shrink-0 mt-0.5" size={18} />
@@ -211,7 +285,6 @@ export default function App() {
 
       <footer className="p-4 md:p-6 bg-gradient-to-t from-slate-950 to-transparent">
         <div className="max-w-4xl mx-auto">
-          {/* Mobile Mode Switcher (Visible only on small screens) */}
           <div className="flex sm:hidden justify-center gap-4 mb-4">
              <button onClick={() => setMode('fast')} className={`p-2 rounded-lg ${mode === 'fast' ? 'bg-amber-500' : 'bg-white/5'}`}><Bolt size={18} /></button>
              <button onClick={() => setMode('standard')} className={`p-2 rounded-lg ${mode === 'standard' ? 'bg-cyan-500' : 'bg-white/5'}`}><Zap size={18} /></button>
