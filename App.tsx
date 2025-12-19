@@ -100,7 +100,6 @@ class PolarisAudio {
     this.mood = 'chaos';
     const now = this.ctx.currentTime;
     const duration = 6 + (intensity * 2);
-    // Unsettling, grand Ligeti-esque microtonal clusters
     for (let i = 0; i < (20 + intensity * 5); i++) {
       const osc = this.ctx.createOscillator();
       const g = this.ctx.createGain();
@@ -167,8 +166,7 @@ class PolarisAudio {
         g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.1);
         break;
       case 'emerald':
-        // Melodic burst for the azure flare
-        osc.frequency.setValueAtTime(523.25, this.ctx.currentTime); // C5
+        osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
         g.gain.setValueAtTime(0.1, this.ctx.currentTime);
         g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
         break;
@@ -247,6 +245,8 @@ export default function App() {
 
   const posRef = useRef({ x: 0, y: 0 });
   const velRef = useRef({ vx: 0, vy: 0 });
+  const scaleRef = useRef(1);
+  const scaleVelRef = useRef(0);
   const requestRef = useRef<number>();
   const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -258,10 +258,10 @@ export default function App() {
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const animate = useCallback(() => {
+    // 1. Position Spring (Slow and graceful return to 0,0)
     if (!state.isDragging) {
-      // Increased spring strength for a snappier return to center
-      const springStrength = 0.04;
-      const damping = 0.88;
+      const springStrength = 0.015; // Lower for slower, floaty return
+      const damping = 0.94; // Higher for smoother settle
 
       velRef.current.vx += (0 - posRef.current.x) * springStrength;
       velRef.current.vy += (0 - posRef.current.y) * springStrength;
@@ -272,21 +272,52 @@ export default function App() {
       velRef.current.vx *= damping;
       velRef.current.vy *= damping;
 
-      const threshold = 0.02;
+      const threshold = 0.01;
       if (Math.abs(posRef.current.x) < threshold && Math.abs(posRef.current.y) < threshold && Math.abs(velRef.current.vx) < threshold) {
         posRef.current.x = 0;
         posRef.current.y = 0;
         velRef.current.vx = 0;
         velRef.current.vy = 0;
       }
-
-      setState(prev => {
-        if (prev.dragOffset.x === posRef.current.x && prev.dragOffset.y === posRef.current.y) return prev;
-        return { ...prev, dragOffset: { x: posRef.current.x, y: posRef.current.y } };
-      });
     }
+
+    // 2. Scale Spring (Graceful return to scale 1)
+    if (!state.isCharging && !state.isCrazy && !state.isPressed) {
+      const scaleSpring = 0.01;
+      const scaleDamping = 0.9;
+      
+      scaleVelRef.current += (1 - scaleRef.current) * scaleSpring;
+      scaleRef.current += scaleVelRef.current;
+      scaleVelRef.current *= scaleDamping;
+
+      if (Math.abs(1 - scaleRef.current) < 0.001 && Math.abs(scaleVelRef.current) < 0.001) {
+        scaleRef.current = 1;
+        scaleVelRef.current = 0;
+      }
+    } else if (state.isCharging) {
+      // Scale up during charging
+      scaleRef.current = Math.min(scaleRef.current + 0.02, 1.4);
+    } else if (state.isPressed) {
+      // Slight shrink on press
+      scaleRef.current = Math.max(scaleRef.current - 0.01, 0.95);
+    }
+
+    // Sync State
+    setState(prev => {
+      const posChanged = prev.dragOffset.x !== posRef.current.x || prev.dragOffset.y !== posRef.current.y;
+      const scaleChanged = prev.scale !== scaleRef.current;
+      
+      if (!posChanged && !scaleChanged) return prev;
+      
+      return { 
+        ...prev, 
+        dragOffset: { x: posRef.current.x, y: posRef.current.y },
+        scale: scaleRef.current
+      };
+    });
+
     requestRef.current = requestAnimationFrame(animate);
-  }, [state.isDragging, state.scale]);
+  }, [state.isDragging, state.isCharging, state.isCrazy, state.isPressed]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
@@ -302,24 +333,22 @@ export default function App() {
     setState(s => ({ ...s, isCrazy: true, crazyStage: 'stargate' }));
     audio.playStargate(currentIntensity);
 
-    // Stage 1: The Stargate tunnel
     setTimeout(() => {
       setState(s => ({ ...s, crazyStage: 'stars' }));
       audio.playMilkyWay();
     }, duration);
 
-    // Stage 2: Drift into the Milky Way
     setTimeout(() => {
       setState(s => ({ ...s, crazyStage: 'fade' }));
     }, duration + 5000);
 
-    // Final reset to center
     setTimeout(() => {
       setState(s => ({ ...s, isCrazy: false, crazyStage: 'none', clickCount: 0 }));
       setJourneyCount(prev => prev + 1);
       audio.mood = 'ambient';
       posRef.current = { x: 0, y: 0 };
       velRef.current = { vx: 0, vy: 0 };
+      scaleRef.current = 1;
     }, duration + 9000);
   };
 
@@ -337,6 +366,7 @@ export default function App() {
       }));
       posRef.current = { x: 0, y: 0 };
       velRef.current = { vx: 0, vy: 0 };
+      scaleRef.current = 1;
     }, 2000);
   };
 
@@ -418,14 +448,10 @@ export default function App() {
 
   const startInteraction = (x: number, y: number) => {
     audio.init();
-    
-    // Clear previous reset timeout
     if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
 
     setState(prev => {
       const nextCount = prev.clickCount + 1;
-      
-      // Trigger features based on click count
       switch (nextCount) {
         case 2: audio.playSfx('burst'); break;
         case 3: audio.playSfx('emerald'); break;
@@ -436,11 +462,9 @@ export default function App() {
         case 8: triggerSupernova(); break;
         default: audio.playSfx('click');
       }
-
       return { ...prev, isPressed: true, clickRipple: true, clickCount: nextCount };
     });
 
-    // Reset click count if user stops for 4 seconds (except if already crazy)
     clickTimeoutRef.current = setTimeout(() => {
       setState(prev => prev.isCrazy ? prev : { ...prev, clickCount: 0 });
     }, 4000);
@@ -459,8 +483,8 @@ export default function App() {
     if (dragStartRef.current) {
       const newX = x - dragStartRef.current.x;
       const newY = y - dragStartRef.current.y;
-      velRef.current.vx = (newX - posRef.current.x) * 0.5;
-      velRef.current.vy = (newY - posRef.current.y) * 0.5;
+      velRef.current.vx = (newX - posRef.current.x) * 0.4;
+      velRef.current.vy = (newY - posRef.current.y) * 0.4;
       posRef.current.x = newX;
       posRef.current.y = newY;
       setState(prev => ({ ...prev, isDragging: true, dragOffset: { x: newX, y: newY } }));
@@ -468,7 +492,6 @@ export default function App() {
   };
 
   const endInteraction = () => {
-    // 1 Click (standard)
     if (!state.isDragging && !state.isCharging && state.isPressed && !state.isCrazy && state.clickCount === 1) {
       toggleVoice();
     }
@@ -483,6 +506,7 @@ export default function App() {
       onMouseDown={e => startInteraction(e.clientX - window.innerWidth / 2, e.clientY - window.innerHeight / 2)}
       onMouseMove={e => moveInteraction(e.clientX - window.innerWidth / 2, e.clientY - window.innerHeight / 2)}
       onMouseUp={endInteraction}
+      onMouseLeave={endInteraction}
       onTouchStart={e => {
         const t = e.touches[0];
         startInteraction(t.clientX - window.innerWidth / 2, t.clientY - window.innerHeight / 2);
@@ -497,37 +521,30 @@ export default function App() {
         audio.playSfx('burst');
       }}
     >
-      {/* Supernova Reset Effect */}
       {state.crazyStage === 'supernova' && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-white animate-supernova pointer-events-none" />
       )}
 
-      {/* Crazy Journey Background Layers */}
       <div className={`absolute inset-0 transition-all duration-[3000ms] pointer-events-none ${state.isCrazy ? 'opacity-100' : 'opacity-0'}`}>
-        
-        {/* Stage 1: The Stargate / Slit-Scan Tunnel */}
         {state.crazyStage === 'stargate' && (
           <div className="absolute inset-0 flex items-center justify-center stargate-tunnel">
             <div className="absolute w-full h-[160%] left-0 top-[-30%] flex justify-between px-[2vw]">
               <div className={`w-[48%] h-full slit-scan ${tunnelStyle} animate-stargate-scroll opacity-90`} style={{ transform: 'rotateY(70deg)', animationDuration: `${2 - Math.min(journeyCount * 0.2, 1.5)}s` }}></div>
               <div className={`w-[48%] h-full slit-scan ${tunnelStyle} animate-stargate-scroll opacity-90`} style={{ transform: 'rotateY(-70deg)', animationDuration: `${2.1 - Math.min(journeyCount * 0.2, 1.6)}s` }}></div>
             </div>
-            {/* Escalating Rings */}
             {[...Array(5 + Math.min(journeyCount * 2, 10))].map((_, i) => (
               <div 
                 key={i} 
                 className="absolute inset-0 flex items-center justify-center animate-stargate-zoom"
                 style={{ animationDelay: `${i * (1 - Math.min(journeyCount * 0.05, 0.7))}s` }}
               >
-                <div className={`w-1/2 h-1/2 border-[15px] rounded-full blur-lg opacity-40 ${tunnelStyle === 'slit-scan-hell' ? 'border-orange-500' : tunnelStyle === 'slit-scan-void' ? 'border-cyan-200' : 'border-cyan-400'}`}></div>
+                <div className={`w-1/2 h-1/2 border-[15px] rounded-full blur-lg opacity-40 ${tunnelStyle === 'slit-scan-hell' ? 'border-orange-500' : tunnelStyle === 'slit-scan-void' ? 'border-cyan-200' : 'border-blue-400'}`}></div>
               </div>
             ))}
-            {/* Center void depth */}
             <div className="absolute w-40 h-40 bg-black rounded-full shadow-[0_0_300px_rgba(255,255,255,0.6)] blur-[60px]"></div>
           </div>
         )}
 
-        {/* Stage 2 & 3: Stars and Fade */}
         {(state.crazyStage === 'stars' || state.crazyStage === 'fade') && (
           <div className={`absolute inset-0 transition-opacity duration-[3000ms] ${state.crazyStage === 'fade' ? 'opacity-0' : 'opacity-100'}`}>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,#1a0b2e,transparent),radial-gradient(circle_at_70%_40%,#0c1a3b,transparent)] opacity-60" />
@@ -552,7 +569,7 @@ export default function App() {
       </div>
 
       <div 
-        className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-[opacity,transform] duration-[1500ms] ease-out ${state.crazyStage === 'stargate' ? 'scale-0 blur-xl opacity-0' : 'scale-100 opacity-100'}`}
+        className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-[opacity] duration-[1500ms] ease-out ${state.crazyStage === 'stargate' ? 'scale-0 blur-xl opacity-0' : 'opacity-100'}`}
         style={{ transform: `translate(${state.dragOffset.x}px, ${state.dragOffset.y}px) scale(${state.scale})` }}
       >
         <Orb 
