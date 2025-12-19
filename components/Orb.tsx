@@ -23,14 +23,14 @@ export const Orb: React.FC<OrbProps> = ({ state, interactive }) => {
   const rotationSpeed = isCharging ? '[animation-duration:2s]' : isHovered ? '[animation-duration:8s]' : '[animation-duration:12s]';
   const coreScale = isCharging ? 'scale-150' : isPressed ? 'scale-90' : 'scale-100';
 
-  // Voice Color Mapping
+  // Voice Color Mapping - strictly blue spectrum
   const getBaseColor = () => {
-    // 3 Clicks Mode: Emerald Flare
-    if (clickCount === 3) return 'radial-gradient(circle at 35% 35%, #ecfdf5 0%, #10b981 40%, #065f46 80%, #064e3b 100%)';
+    // Azure Flare for click count 3 (previously Emerald)
+    if (clickCount === 3) return 'radial-gradient(circle at 35% 35%, #f0f9ff 0%, #0ea5e9 40%, #0369a1 80%, #0c4a6e 100%)';
     
-    if (voiceState === 'speaking') return 'radial-gradient(circle at 35% 35%, #fff 0%, #22d3ee 30%, #0891b2 70%, #083344 100%)';
-    if (voiceState === 'listening') return 'radial-gradient(circle at 35% 35%, #a5f3fc 0%, #06b6d4 40%, #155e75 80%, #083344 100%)';
-    if (isCharging) return 'radial-gradient(circle at 35% 35%, #fff 0%, #38bdf8 20%, #0284c7 50%, #0c4a6e 100%)';
+    if (voiceState === 'speaking') return 'radial-gradient(circle at 35% 35%, #fff 0%, #38bdf8 30%, #0284c7 70%, #0c4a6e 100%)';
+    if (voiceState === 'listening') return 'radial-gradient(circle at 35% 35%, #e0f2fe 0%, #0ea5e9 40%, #075985 80%, #0c4a6e 100%)';
+    if (isCharging) return 'radial-gradient(circle at 35% 35%, #fff 0%, #7dd3fc 20%, #0369a1 50%, #082f49 100%)';
     return 'radial-gradient(circle at 35% 35%, #38bdf8 0%, #0ea5e9 25%, #0284c7 50%, #0369a1 75%, #0c4a6e 100%)';
   };
 
@@ -52,32 +52,32 @@ export const Orb: React.FC<OrbProps> = ({ state, interactive }) => {
   return (
     <div className={`relative flex items-center justify-center w-64 h-64 sm:w-80 sm:h-80 md:w-[32rem] md:h-[32rem] transition-all duration-700 ${isDragging ? 'animate-none' : 'animate-float'} ${clickAnimations} ${ghostOpacity}`}>
       
-      {/* 1. Outer Ethereal Nebula Glow */}
+      {/* 1. Outer Ethereal Nebula Glow - strictly blue shades */}
       <div className={`
         absolute inset-0 rounded-full blur-[120px] transition-all duration-1000
         ${glowOpacity}
-        ${clickCount === 3 ? 'bg-emerald-400' : voiceState === 'speaking' ? 'bg-cyan-400' : 'bg-blue-600'}
+        ${clickCount === 3 ? 'bg-sky-400' : voiceState === 'speaking' ? 'bg-blue-400' : 'bg-blue-600'}
         ${isCharging || voiceState !== 'idle' ? 'animate-pulse' : 'animate-[pulse_12s_ease-in-out_infinite]'}
       `}></div>
       
-      {/* 2. Secondary Pulse layer */}
+      {/* 2. Secondary Pulse layer - strictly blue shades */}
       <div className={`
         absolute inset-10 rounded-full blur-[80px] transition-all duration-500
-        ${clickCount === 3 ? 'bg-emerald-600' : voiceState === 'speaking' ? 'bg-cyan-300 opacity-40' : 'bg-sky-700'}
+        ${clickCount === 3 ? 'bg-blue-500' : voiceState === 'speaking' ? 'bg-sky-300 opacity-40' : 'bg-sky-700'}
         ${isCharging ? 'opacity-40 scale-125' : isHovered ? 'opacity-25' : 'opacity-15'}
       `}></div>
       
-      {/* 3. Voice/Interaction Ripples */}
+      {/* 3. Voice/Interaction Ripples - blue shades */}
       {(voiceState !== 'idle' || hasRipple || clickCount === 2) && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className={`absolute w-full h-full rounded-full border ${clickCount === 3 ? 'border-emerald-400/30' : 'border-cyan-400/30'} ${voiceState === 'speaking' ? 'animate-[ping_0.5s_linear_infinite]' : 'animate-[ping_2s_linear_infinite]'}`}></div>
-          <div className={`absolute w-3/4 h-3/4 rounded-full border ${clickCount === 3 ? 'border-emerald-400/10' : 'border-cyan-400/10'} animate-[ping_3s_linear_infinite]`}></div>
+          <div className={`absolute w-full h-full rounded-full border border-blue-400/30 ${voiceState === 'speaking' ? 'animate-[ping_0.5s_linear_infinite]' : 'animate-[ping_2s_linear_infinite]'}`}></div>
+          <div className={`absolute w-3/4 h-3/4 rounded-full border border-blue-400/10 animate-[ping_3s_linear_infinite]`}></div>
         </div>
       )}
 
-      {/* 4. Double Click Burst Effect */}
+      {/* 4. Double Click Burst Effect - blue shades */}
       {(burstCount > 0 || clickCount === 2) && (
-        <div className={`absolute inset-[-20%] rounded-full border-4 ${clickCount === 3 ? 'border-emerald-400/50' : 'border-cyan-400/50'} blur-sm ${burstAnimation}`}></div>
+        <div className={`absolute inset-[-20%] rounded-full border-4 border-blue-400/50 blur-sm ${burstAnimation}`}></div>
       )}
 
       {/* 5. The Core Sphere */}
@@ -88,8 +88,8 @@ export const Orb: React.FC<OrbProps> = ({ state, interactive }) => {
           flex items-center justify-center
           overflow-hidden
           ${coreScale}
-          ${voiceState === 'speaking' ? 'shadow-[0_0_120px_rgba(34,211,238,0.6)]' : ''}
-          ${clickCount === 3 ? 'shadow-[0_0_120px_rgba(16,185,129,0.6)]' : ''}
+          ${voiceState === 'speaking' ? 'shadow-[0_0_120px_rgba(56,189,248,0.6)]' : ''}
+          ${clickCount === 3 ? 'shadow-[0_0_120px_rgba(14,165,233,0.6)]' : ''}
           ${isCharging ? 'shadow-[0_0_150px_rgba(56,189,248,0.8)]' : isHovered ? 'shadow-[0_0_100px_rgba(14,165,233,0.4)]' : 'shadow-[0_0_60px_rgba(14,165,233,0.2)]'}
           ${state === 'idle' && !isPressed && voiceState === 'idle' ? 'animate-[pulse_10s_ease-in-out_infinite]' : ''}
         `}
@@ -106,7 +106,7 @@ export const Orb: React.FC<OrbProps> = ({ state, interactive }) => {
 
         {/* Dynamic Activity Rings */}
         <div className={`absolute inset-0 w-full h-full animate-spin-slow ${rotationSpeed}`}>
-          <div className={`absolute top-1/2 left-1/2 w-[110%] h-[110%] -translate-x-1/2 -translate-y-1/2 rounded-full border-t border-b border-white/10 blur-[2px] ${voiceState !== 'idle' ? 'border-cyan-200/20 shadow-[0_0_10px_cyan]' : ''}`}></div>
+          <div className={`absolute top-1/2 left-1/2 w-[110%] h-[110%] -translate-x-1/2 -translate-y-1/2 rounded-full border-t border-b border-white/10 blur-[2px] ${voiceState !== 'idle' ? 'border-blue-200/20 shadow-[0_0_10px_blue]' : ''}`}></div>
         </div>
 
         {/* Internal Core Pulsation */}

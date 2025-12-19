@@ -167,6 +167,7 @@ class PolarisAudio {
         g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.1);
         break;
       case 'emerald':
+        // Melodic burst for the azure flare
         osc.frequency.setValueAtTime(523.25, this.ctx.currentTime); // C5
         g.gain.setValueAtTime(0.1, this.ctx.currentTime);
         g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
@@ -258,8 +259,9 @@ export default function App() {
 
   const animate = useCallback(() => {
     if (!state.isDragging) {
-      const springStrength = 0.015;
-      const damping = 0.92;
+      // Increased spring strength for a snappier return to center
+      const springStrength = 0.04;
+      const damping = 0.88;
 
       velRef.current.vx += (0 - posRef.current.x) * springStrength;
       velRef.current.vy += (0 - posRef.current.y) * springStrength;
@@ -270,7 +272,7 @@ export default function App() {
       velRef.current.vx *= damping;
       velRef.current.vy *= damping;
 
-      const threshold = 0.05;
+      const threshold = 0.02;
       if (Math.abs(posRef.current.x) < threshold && Math.abs(posRef.current.y) < threshold && Math.abs(velRef.current.vx) < threshold) {
         posRef.current.x = 0;
         posRef.current.y = 0;
@@ -560,10 +562,10 @@ export default function App() {
       </div>
 
       <div className="absolute bottom-10 left-0 w-full flex flex-col items-center gap-2 pointer-events-none">
-        <div className={`text-[10px] font-bold uppercase tracking-[0.4em] transition-all duration-300 ${state.isCrazy ? 'text-cyan-400 animate-pulse scale-150' : 'text-white/10 animate-pulse'}`}>
+        <div className={`text-[10px] font-bold uppercase tracking-[0.4em] transition-all duration-300 ${state.isCrazy ? 'text-blue-400 animate-pulse scale-150' : 'text-white/10 animate-pulse'}`}>
           {state.crazyStage === 'stargate' ? (journeyCount > 2 ? 'DIMENSIONAL TEAR' : 'BEYOND THE INFINITE') : 
            state.crazyStage === 'stars' ? 'REACHING THE CORE' : 
-           state.clickCount === 3 ? 'EMERALD RESONANCE' :
+           state.clickCount === 3 ? 'AZURE RESONANCE' :
            state.clickCount === 4 ? 'GRAVITY FLUCTUATION' :
            state.clickCount === 5 ? 'DIMENSIONAL GLITCH' :
            state.clickCount === 6 ? 'ASTRAL PHASING' :
